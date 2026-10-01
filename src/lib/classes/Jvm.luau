@@ -4,9 +4,11 @@ local jcl_classfiles = require("../jcl_classfiles")
 local native_methods = require("../native_methods")
 local t = require("../t")
 local util = require("../util")
+local GarbageCollector = require("./GarbageCollector")
 local JvmClass = require("./JvmClass")
 
 local Jvm = {}
+
 Jvm.__type = "Jvm"
 Jvm.__index = Jvm
 
@@ -149,7 +151,7 @@ function Jvm.new(link_native: t.LinkNativeCallback): t.Jvm
         },
         _threads = {},
         current_thread = nil,
-        _gc = (nil :: any) :: t.IGarbageCollector,
+        _gc = (nil :: any) :: t.GarbageCollector,
         _link_user_native = link_native,
         _interned_strings = {},
         _interned_method_refs = {},
@@ -157,6 +159,7 @@ function Jvm.new(link_native: t.LinkNativeCallback): t.Jvm
     }, Jvm)
 
     bootstrap_core_classes(self)
+    self._gc = GarbageCollector._new(self)
 
     return self
 end

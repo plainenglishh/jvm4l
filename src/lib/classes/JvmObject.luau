@@ -68,7 +68,9 @@ function JvmObject._allocate(jvm: t.Jvm, class: t.JvmClass, magic: t._MagicValue
         _field_values = {},
     }
     inner.hash_code = hashcode_of(inner)
-    return setmetatable(inner, JvmObject)
+    local self = setmetatable(inner, JvmObject)
+    jvm._gc:_track(self)
+    return self
 end
 
 function JvmObject._initialise(_self: t.JvmObject, ...: t.JvmValue)

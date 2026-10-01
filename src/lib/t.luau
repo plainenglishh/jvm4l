@@ -51,7 +51,7 @@ export type Jvm = setmetatable<
         read _classes: { [JvmClassLoader]: { [string]: JvmClass } },
         read _threads: { JvmThread },
         read current_thread: JvmThread?,
-        _gc: IGarbageCollector,
+        _gc: GarbageCollector,
         _link_user_native: LinkNativeCallback,
         read _interned_strings: { [string]: JvmObject },
         read _interned_method_refs: { [JvmClass]: { [string]: { [string]: MethodRef } } },
@@ -90,20 +90,19 @@ export type LinkNativeCallback = (class_name: string, signature: string) -> Nati
 --- A reference to a class loader. Either "bootstrap", or a reference to a user-defined loader.
 export type JvmClassLoader = "bootstrap" | JvmObject
 
---- A Garbage Collector implementation.
-export type IGarbageCollector = setmetatable<
+--- The garbage collector, responsible for tracking, finalising and dropping objects (to allow the Luau GC to clear it)
+export type GarbageCollector = setmetatable<
     {
-        [any]: any,
+        jvm: Jvm,
+        _objects: { [JvmObject]: boolean },
     },
     {
-        __index: getmetatable<IGarbageCollector>,
-        --- Constructor, called by JVM when creating the GC.
-        new: (jvm: Jvm, finalise: GcFinalise) -> IGarbageCollector,
+        __index: getmetatable<GarbageCollector>,
+        _new: (jvm: Jvm) -> GarbageCollector,
         --- Registers a JvmObject with this GC.
-        track: (self: IGarbageCollector, object: JvmObject) -> (),
+        _track: (self: GarbageCollector, object: JvmObject) -> (),
         --- Steps the garbage collector.
-        step: (self: IGarbageCollector) -> (),
-        [any]: any,
+        _step: (self: GarbageCollector) -> (),
     }
 >
 
