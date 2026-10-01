@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lute",
+            "request": "launch",
+            "name": "Debug Luau File",
+            "program": "${file}",
+            "args": [],
+            "trace": true
+        }
+    ]
+}

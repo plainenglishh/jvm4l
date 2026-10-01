@@ -1,0 +1,80 @@
+local fs = require("@std/fs")
+local process = require("@std/process")
+
+if fs.exists("jcl/bin") then
+    fs.removeDirectory("jcl/bin", { recursive = true })
+end
+
+fs.createDirectory("jcl/bin")
+
+local function find_files(path: string, ext: string)
+    local files = {}
+
+    local function find_files_recursive(dir: string)
+        for _, entry in fs.listDirectory(dir) do
+            local path = dir .. "/" .. entry.name
+
+            if entry.type == "dir" then
+                find_files_recursive(path)
+            elseif entry.type == "file" and string.match(entry.name, `%.{ext}$`) then
+                table.insert(files, path)
+            end
+        end
+    end
+
+    find_files_recursive(path)
+
+    return files
+end
+
+local sources: { string } = find_files("jcl/src", "java")
+
+local r = process.run({
+    "javac",
+    "-source",
+    "1.8",
+    "-target",
+    "1.8",
+    "-g:none",
+    "-bootclasspath",
+    "",
+    "-sourcepath",
+    "jcl/src",
+    "-d",
+    "jcl/bin",
+    unpack(sources),
+})
+
+if r.stdout ~= "" then
+    print(r.stdout)
+end
+if r.stderr ~= "" then
+    print(r.stderr)
+end
+if not r.ok then
+    error("failed to build!")
+end
+
+local artifacts = find_files("jcl/bin", "class")
+
+local out = {}
+
+table.insert(out, "--- @generated\nlocal jcl: { [string]: buffer } = {}\n\n")
+
+for _, artifact_path in artifacts do
+    local artifact = fs.readFileToString(artifact_path):gsub(".", function(char: string)
+        return string.format("\\x%02X", string.byte(char) or error(""))
+    end)
+    table.insert(
+        out,
+        string.format(
+            'jcl[%q] = buffer.fromstring("%s")\n',
+            artifact_path:match("^jcl/bin/(.+)%.class") or error(""),
+            artifact
+        )
+    )
+end
+
+table.insert(out, "\nreturn jcl")
+
+fs.writeStringToFile("src/lib/jcl_classfiles.luau", table.concat(out))

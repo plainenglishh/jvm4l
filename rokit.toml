@@ -1,0 +1,5 @@
+
+[tools]
+lute = "luau-lang/lute@1.0.1-nightly.20260929"
+StyLua = "JohnnyMorganz/StyLua@2.5.2"
+seal = "seal-runtime/seal@0.8.1"
