@@ -24,6 +24,7 @@ JvmObject.__type = "JvmObject"
 JvmObject.__index = JvmObject
 
 function JvmObject.__tostring(self: t.JvmObject): string
+    -- at what point should this be deferred to the objects toString impl, if at all?
     local Throwable = self.jvm:resolve_class("java/lang/Throwable")
     if not self:instance_of(Throwable) then
         local bits = bit32.band(self.hash_code, 0xFFFFFFFF)
