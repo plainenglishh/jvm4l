@@ -62,14 +62,7 @@ end
     Will resolve types.
 ]=]
 function typechecker.check_field(jvm: t.Jvm, value: t.JvmValue, class: t.JvmClass, target: t.FieldInfo)
-    local field_type: t.JvmType
-    if target.type then
-        field_type = target.type
-    else
-        field_type = descriptor_parser.resolve_descriptor(jvm, target.descriptor, class.loader)
-        target.type = field_type
-    end
-
+    local field_type = descriptor_parser.resolve_descriptor(jvm, target.descriptor, class.loader)
     return typechecker.check_value(value, field_type)
 end
 
@@ -79,13 +72,7 @@ end
     Will resolve types.
 ]=]
 function typechecker.check_method(jvm: t.Jvm, values: { t.JvmValue }, class: t.JvmClass, target: t.MethodInfo): boolean
-    local method_type: t.JvmMethodType
-    if target.type then
-        method_type = target.type
-    else
-        method_type = descriptor_parser.resolve_method_descriptor(jvm, target.descriptor, class.loader)
-        target.type = method_type
-    end
+    local method_type = descriptor_parser.resolve_method_descriptor(jvm, target.descriptor, class.loader)
 
     if #values ~= #method_type.arguments then
         return false

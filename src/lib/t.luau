@@ -313,7 +313,6 @@ export type FieldInfo = {
     read name: string,
     read descriptor: string,
     read signature: string,
-    type: JvmType?, -- lazy resolution
 
     read public: boolean,
     read private: boolean,
@@ -336,7 +335,6 @@ export type MethodInfo = {
     read descriptor: string,
     read signature: string,
     read code: MethodCode,
-    type: JvmMethodType?, -- lazy resolution
 
     read public: boolean,
     read private: boolean,
