@@ -79,15 +79,27 @@ export type Jvm = setmetatable<
         get_field_ref: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> FieldRef,
 
         create_string: (self: Jvm, value: string) -> JvmObject,
-        create_array: (self: Jvm, element: JvmType, size: number) -> JvmObject,
+        create_array: (self: Jvm, element: JvmType, size_or_values: number | { JvmValue }) -> JvmObject,
 
-        create_exception: (self: Jvm, name: string, message: string?, cause: JvmObject?) -> JvmObject,
-        throw_exception: (self: Jvm, name: string, message: string?, cause: JvmObject?) -> never,
+        create_exception: (
+            self: Jvm,
+            name: string,
+            message: string?,
+            cause: JvmObject?,
+            dont_capture_stack: boolean?
+        ) -> JvmObject,
+        throw_exception: (
+            self: Jvm,
+            name: string,
+            message: string?,
+            cause: JvmObject?,
+            dont_capture_stack: boolean?
+        ) -> never,
 
         --- Creates an `InternalError`, with a `LuauError` as the cause.
         internal_error: (self: Jvm, message: string, level: number?) -> never,
 
-        coerce: (self: Jvm, value: IntoJvmValue) -> JvmValue,
+        coerce: (self: Jvm, ...IntoJvmValue) -> ...JvmValue,
 
         --[=[
 			Executes `main_path`.
@@ -230,7 +242,7 @@ export type JvmClass = setmetatable<
 			Creates a new Object from this class, dynamically selecting a
 			constructor from given values, if one exists.
 		]=]
-        new: (self: JvmClass, ...JvmValue) -> JvmObject,
+        new: (self: JvmClass, constructor: MethodRef, ...JvmValue) -> JvmObject,
 
         inherits_from: (self: JvmClass, other: JvmClass) -> boolean,
         implements: (self: JvmClass, interface: JvmClass) -> boolean,
@@ -254,7 +266,7 @@ export type JvmObject = setmetatable<
         read hash_code: number,
 
         read _monitor: Monitor,
-        read _magic: _MagicValue?,
+        _magic: _MagicValue?,
         --- The actual field values. An absent value means it's uninitialised.
         read _field_values: { [FieldRef]: JvmValue },
     },
@@ -310,6 +322,10 @@ export type _MagicValue =
     | {
         kind: "thread", -- java/lang/Thread
         value: JvmThread,
+    }
+    | {
+        kind: "throwable", -- java/lang/Throwable
+        stack: { StackFrame },
     }
 
 export type FieldInfo = {

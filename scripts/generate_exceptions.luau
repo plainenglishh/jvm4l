@@ -20,6 +20,7 @@ local EXCEPTIONS: { [string]: string } = {
 
     LinkageError = "Error",
     UnsatisfiedLinkError = "LinkageError",
+    NoClassDefFoundError = "LinkageError",
 }
 
 local TEMPLATE = [[package java.lang;

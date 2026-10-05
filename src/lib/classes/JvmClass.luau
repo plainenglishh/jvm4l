@@ -113,7 +113,7 @@ function JvmClass.new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t.
     return JvmObject._allocate(self.jvm, self, magic)
 end
 
-function JvmClass.new(self: t.JvmClass, ...: t.JvmValue): t.JvmObject
+function JvmClass.new(self: t.JvmClass, _constructor: t.MethodRef, ...: t.JvmValue): t.JvmObject
     local o = self:new_uninitialised()
     -- TODO: Select and call initialiser.
     return o

@@ -32,14 +32,32 @@ function JvmObject.__tostring(self: t.JvmObject): string
         return string.format("<JvmObject: %s@%08x>", self.class.fqcn, bits)
     end
 
-    local message_ref = self.jvm:get_field_ref(Throwable, "message", "String")
+    local message_ref = self.jvm:get_field_ref(Throwable, "message", "Ljava/lang/String;")
     local message = self:get_field(message_ref) :: t.JvmObjectRef
     local message_str = ""
     if message then
         message_str = `: {message:inner_string()}`
     end
 
-    return `{self.class.fqcn}{message_str}`
+    local stack_trace = ""
+    if self._magic then
+        assert(self._magic.kind == "throwable")
+        local builder = {}
+
+        for _, frame in self._magic.stack do
+            table.insert(builder, 1, `    at {frame.class.fqcn}.{frame.method.name}()`)
+        end
+
+        stack_trace = "\n" .. table.concat(builder, "\n")
+    end
+
+    local cause = self:get_field(self.jvm:get_field_ref(Throwable, "cause", "Ljava/lang/Throwable;"))
+    local cause_str = ""
+    if cause then
+        cause_str = "\nCaused by: " .. tostring(cause)
+    end
+
+    return `{self.class.fqcn}{message_str}{stack_trace}{cause_str}`
 end
 
 function JvmObject.__display(self: t.JvmObject): string
@@ -133,7 +151,8 @@ end
 
 function JvmObject.get_array_element(self: t.JvmObject, index: number): t.JvmValue
     if not self._magic or self._magic.kind ~= "array" then
-        error("not an array")
+        self.jvm:throw_exception("java/lang/IncompatibleClassChangeError")
+        error("^")
     end
 
     assert_array_bounds(self, index)
@@ -142,11 +161,12 @@ end
 
 function JvmObject.set_array_element(self: t.JvmObject, index: number, value: t.JvmValue)
     if not self._magic or self._magic.kind ~= "array" then
-        error("not an array")
+        self.jvm:throw_exception("java/lang/IncompatibleClassChangeError")
+        error("^")
     end
 
     if not typechecker.check_value(value, self._magic.element) then
-        self.jvm:throw_exception("java/lang/IllegalArgumentException")
+        self.jvm:throw_exception("java/lang/ArrayStoreException")
     end
 
     assert_array_bounds(self, index)
@@ -155,7 +175,8 @@ end
 
 function JvmObject.get_array_elements(self: t.JvmObject, index: number?, count: number?): { t.JvmValue }
     if not self._magic or self._magic.kind ~= "array" then
-        error("not an array")
+        self.jvm:throw_exception("java/lang/IncompatibleClassChangeError")
+        error("^")
     end
 
     local index = index or 0
@@ -165,7 +186,7 @@ function JvmObject.get_array_elements(self: t.JvmObject, index: number?, count: 
     assert_array_bounds(self, index + count - 1)
 
     local values: { t.JvmValue } = table.create(count, nil :: any)
-    table.move(self._magic.values, index + 1, index + count + 1, 1, values)
+    table.move(self._magic.values, index + 1, index + count, 1, values)
     return values
 end
 

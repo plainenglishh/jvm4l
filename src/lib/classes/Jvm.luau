@@ -346,23 +346,45 @@ function Jvm.create_string(self: t.Jvm, value: string): t.JvmObject
     return str_obj
 end
 
-function Jvm.create_array(self: t.Jvm, element: t.JvmType, size: number): t.JvmObject
+function Jvm.create_array(self: t.Jvm, element: t.JvmType, size_or_values: number | { t.JvmValue }): t.JvmObject
     local elem_descriptor = descriptor_parser.type_to_descriptor(element)
     local class_name = `[{elem_descriptor}`
     local class = self:resolve_class(class_name)
+
+    local size = if type(size_or_values) == "number" then size_or_values else #size_or_values
+
     local array = class:new_uninitialised({
         kind = "array",
         element = element,
         length = size,
         values = table.create(size, nil :: any),
     })
+
+    if type(size_or_values) == "table" then
+        for i = 1, size do
+            array:set_array_element(i - 1, size_or_values[i])
+        end
+    end
+
     return array
 end
 
-function Jvm.create_exception(self: t.Jvm, name: string, message: string?, cause: t.JvmObject?): t.JvmObject
+function Jvm.create_exception(
+    self: t.Jvm,
+    name: string,
+    message: string?,
+    cause: t.JvmObject?,
+    dont_capture_stack: boolean?
+): t.JvmObject
     local Exception = self:resolve_class(name)
     local message = if message then self:create_string(message) else nil
-    local e = Exception:new_uninitialised()
+
+    local magic: t._MagicValue?
+    if (not dont_capture_stack) and self.current_thread then
+        magic = { kind = "throwable", stack = table.clone(self.current_thread._stack) }
+    end
+
+    local e = Exception:new_uninitialised(magic)
 
     local Throwable = self._classes.bootstrap["java/lang/Throwable"]
     local message_field = self:get_field_ref(Throwable, "message", "Ljava/lang/String;")
@@ -374,25 +396,41 @@ function Jvm.create_exception(self: t.Jvm, name: string, message: string?, cause
     return e
 end
 
-function Jvm.throw_exception(self: t.Jvm, name: string, message: string?, cause: t.JvmObject?): never
-    local e = self:create_exception(name, message, cause)
+function Jvm.throw_exception(
+    self: t.Jvm,
+    name: string,
+    message: string?,
+    cause: t.JvmObject?,
+    dont_capture_stack: boolean?
+): never
+    local e = self:create_exception(name, message, cause, dont_capture_stack)
     error(e) -- Caught by the outer host if async, or the exec engine if inside bytecode
 end
 
 function Jvm.internal_error(self: t.Jvm, message: string, level: number?): never
-    local traceback = debug.traceback(message, (level or 1) + 1)
-    local cause = self:create_exception("jvm4l/LuauError", traceback)
+    local traceback = debug.traceback(nil, (level or 1) + 1)
+    local cause =
+        self:create_exception("jvm4l/LuauError", message .. "\n    " .. traceback:gsub("\n", "\n    "), nil, true)
     return self:throw_exception("java/lang/InternalError", message, cause)
 end
 
-function Jvm.coerce(self: t.Jvm, value: t.IntoJvmValue): t.JvmValue
-    if type(value) == "boolean" then
-        return if value then 1 else 0
-    elseif type(value) == "string" then
-        return self:create_string(value)
-    else
-        return value
+function Jvm.coerce(self: t.Jvm, ...: t.IntoJvmValue): ...t.JvmValue
+    local count = select("#", ...)
+    local values: { t.JvmValue } = table.create(count, nil :: any)
+
+    for i = 1, count do
+        local value = select(i, ...)
+
+        if type(value) == "boolean" then
+            value = if value then 1 else 0
+        elseif type(value) == "string" then
+            value = self:create_string(value)
+        end
+
+        values[i] = value
     end
+
+    return unpack(values)
 end
 
 function Jvm.run(_self: t.Jvm, _main_path: string)

@@ -1,4 +1,4 @@
-package java.lang;
+package jvm4l;
 
 public class LuauError extends Error {
     public LuauError() { super(); }

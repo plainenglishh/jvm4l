@@ -28,6 +28,9 @@ local function find_files(path: string, ext: string)
 end
 
 local sources: { string } = find_files("jcl/src", "java")
+for _, source in sources do
+    print(source)
+end
 
 local r = process.run({
     "javac",
