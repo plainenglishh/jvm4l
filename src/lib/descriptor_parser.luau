@@ -1,4 +1,3 @@
-local str = require("../../.seal/typedefs/std/str")
 local t = require("./t")
 local descriptor_parser = {}
 
