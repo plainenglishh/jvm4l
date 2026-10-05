@@ -42,7 +42,11 @@ local function get_members(jvm: t.Jvm, classfile: t.Classfile): ({ t.MethodInfo 
 
         local code: t.MethodCode
         if native then
-            local native_method = link_native(jvm, class_name, signature) or error("link error")
+            local native_method = link_native(jvm, class_name, signature)
+                or jvm:throw_exception(
+                    "java/lang/UnsatisfiedLinkError",
+                    `unable to link native method {class_name}.{signature}`
+                )
 
             code = {
                 kind = "luau",
@@ -218,7 +222,7 @@ function Jvm.get_class(self: t.Jvm, name: string, initiating_loader: t.JvmClassL
 
     if initiating_loader == "bootstrap" then
         if name == "java/lang/Object" or name == "java/lang/Class" then
-            error("attempt to get uninitialised core class? how did you reach this point?")
+            self:internal_error("attempt to get uninitialised core class? how did you reach this point?")
         end
 
         local classfile = jcl_classfiles[name]
@@ -239,7 +243,7 @@ function Jvm.get_class(self: t.Jvm, name: string, initiating_loader: t.JvmClassL
 end
 
 function Jvm.resolve_class(self: t.Jvm, name: string, initiating_loader: t.JvmClassLoader?): t.JvmClass
-    return self:get_class(name, initiating_loader) or error("unknown class")
+    return self:get_class(name, initiating_loader) or self:throw_exception("java/lang/NoClassDefFoundError", name)
 end
 
 function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.JvmClassLoader): t.JvmClass
@@ -373,6 +377,12 @@ end
 function Jvm.throw_exception(self: t.Jvm, name: string, message: string?, cause: t.JvmObject?): never
     local e = self:create_exception(name, message, cause)
     error(e) -- Caught by the outer host if async, or the exec engine if inside bytecode
+end
+
+function Jvm.internal_error(self: t.Jvm, message: string, level: number?): never
+    local traceback = debug.traceback(message, (level or 1) + 1)
+    local cause = self:create_exception("jvm4l/LuauError", traceback)
+    return self:throw_exception("java/lang/InternalError", message, cause)
 end
 
 function Jvm.coerce(self: t.Jvm, value: t.IntoJvmValue): t.JvmValue

@@ -84,6 +84,9 @@ export type Jvm = setmetatable<
         create_exception: (self: Jvm, name: string, message: string?, cause: JvmObject?) -> JvmObject,
         throw_exception: (self: Jvm, name: string, message: string?, cause: JvmObject?) -> never,
 
+        --- Creates an `InternalError`, with a `LuauError` as the cause.
+        internal_error: (self: Jvm, message: string, level: number?) -> never,
+
         coerce: (self: Jvm, value: IntoJvmValue) -> JvmValue,
 
         --[=[

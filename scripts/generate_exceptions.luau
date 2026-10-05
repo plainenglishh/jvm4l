@@ -17,6 +17,9 @@ local EXCEPTIONS: { [string]: string } = {
     StackOverflowError = "VirtualMachineError",
     OutOfMemoryError = "VirtualMachineError",
     InternalError = "VirtualMachineError",
+
+    LinkageError = "Error",
+    UnsatisfiedLinkError = "LinkageError",
 }
 
 local TEMPLATE = [[package java.lang;
