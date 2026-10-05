@@ -35,6 +35,7 @@ public class $name extends $parent {
 }
 ]]
 
+print("--- generating exceptions")
 for name, parent in EXCEPTIONS do
     local src = TEMPLATE:gsub("%$name", name):gsub("%$parent", parent)
     fs.writeStringToFile(`jcl/src/java/lang/exceptions/{name}.java`, src)
@@ -67,10 +68,8 @@ local function find_files(path: string, ext: string)
 end
 
 local sources: { string } = find_files("jcl/src", "java")
-for _, source in sources do
-    print(source)
-end
 
+print("--- building jcl")
 local r = process.run({
     "javac",
     "-source",
@@ -85,17 +84,13 @@ local r = process.run({
     "-d",
     "jcl/bin",
     unpack(sources),
-})
+}, { stdio = "inherit" })
 
-if r.stdout ~= "" then
-    print(r.stdout)
-end
-if r.stderr ~= "" then
-    print(r.stderr)
-end
 if not r.ok then
     error("failed to build!")
 end
+
+print("--- generating jcl_classfiles.luau")
 
 local artifacts = find_files("jcl/bin", "class")
 
@@ -120,3 +115,13 @@ end
 table.insert(out, "\nreturn jcl")
 
 fs.writeStringToFile("src/lib/jcl_classfiles.luau", table.concat(out))
+
+print("--- building docs")
+local docs_r = process.system(
+    'javadoc -source 1.8 -bootclasspath "" -sourcepath jcl/src -d jcl/docs -quiet -notimestamp -subpackages java:jvm4l',
+    { stdio = "inherit" }
+)
+
+if not docs_r.ok then
+    error("")
+end
