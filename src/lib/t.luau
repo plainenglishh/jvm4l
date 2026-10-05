@@ -33,9 +33,15 @@ export type JvmObjectRef = JvmObject?
 --- Any runtime value.
 export type JvmValue = JvmPrimitive | JvmObjectRef
 
+export type IntoJvmValue = boolean | string | number | integer | JvmObjectRef
+
 --// Actual Types
 
-export type JvmType = "boolean" | "byte" | "short" | "char" | "int" | "long" | "float" | "double" | "void" | JvmClass
+export type JvmType = "boolean" | "byte" | "short" | "char" | "int" | "long" | "float" | "double" | JvmClass
+export type JvmMethodType = {
+    arguments: { JvmType },
+    returns: JvmType | "void",
+}
 
 --------------------------------------------------------------------------------
 
@@ -77,6 +83,8 @@ export type Jvm = setmetatable<
 
         create_exception: (self: Jvm, name: string, message: string?, cause: JvmObject?) -> JvmObject,
         throw_exception: (self: Jvm, name: string, message: string?, cause: JvmObject?) -> never,
+
+        coerce: (self: Jvm, value: IntoJvmValue) -> JvmValue,
 
         --[=[
 			Executes `main_path`.
@@ -305,6 +313,7 @@ export type FieldInfo = {
     read name: string,
     read descriptor: string,
     read signature: string,
+    type: JvmType?, -- lazy resolution
 
     read public: boolean,
     read private: boolean,
@@ -320,7 +329,6 @@ export type FieldInfo = {
 export type FieldRef = {
     read class: JvmClass,
     read name: string,
-    read descriptor: string,
 }
 
 export type MethodInfo = {
@@ -328,6 +336,7 @@ export type MethodInfo = {
     read descriptor: string,
     read signature: string,
     read code: MethodCode,
+    type: JvmMethodType?, -- lazy resolution
 
     read public: boolean,
     read private: boolean,
@@ -346,7 +355,6 @@ export type MethodInfo = {
 export type MethodRef = {
     read class: JvmClass,
     read name: string,
-    read descriptor: string,
 }
 
 --[=[

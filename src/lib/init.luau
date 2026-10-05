@@ -12,26 +12,11 @@ export type JvmReal = t.JvmReal
 export type JvmPrimitive = t.JvmPrimitive
 export type JvmObjectRef = t.JvmObjectRef
 export type JvmValue = t.JvmValue
-export type JvmBooleanType = t.JvmBooleanType
-export type JvmByteType = t.JvmByteType
-export type JvmShortType = t.JvmShortType
-export type JvmCharType = t.JvmCharType
-export type JvmIntType = t.JvmIntType
-export type JvmLongType = t.JvmLongType
-export type JvmIntegralType = t.JvmIntegralType
-export type JvmFloatType = t.JvmFloatType
-export type JvmDoubleType = t.JvmDoubleType
-export type JvmRealType = t.JvmRealType
-export type JvmVoidType = t.JvmVoidType
-export type JvmPrimitiveType = t.JvmPrimitiveType
-export type JvmObjectType = t.JvmObjectType
-export type JvmArrayType = t.JvmArrayType
-export type JvmFieldType = t.JvmFieldType
-export type JvmMethodType = t.JvmMethodType
+export type JvmType = t.JvmType
 export type Jvm = t.Jvm
 export type LinkNativeCallback = t.LinkNativeCallback
 export type JvmClassLoader = t.JvmClassLoader
-export type IGarbageCollector = t.GarbageCollector
+export type GarbageCollector = t.GarbageCollector
 export type GcFinalise = t.GcFinalise
 export type JvmThread = t.JvmThread
 export type ThreadState = t.ThreadState
@@ -41,7 +26,9 @@ export type JvmClass = t.JvmClass
 export type JvmClassState = t.JvmClassState
 export type JvmObject = t.JvmObject
 export type FieldInfo = t.FieldInfo
+export type FieldRef = t.FieldRef
 export type MethodInfo = t.MethodInfo
+export type MethodRef = t.MethodRef
 export type NativeMethod = t.NativeMethod
 export type MethodCode = t.MethodCode
 export type Classfile = t.Classfile
@@ -71,26 +58,5 @@ export type CfAttributeInfo = t.CfAttributeInfo
 local jvm4l = {}
 
 jvm4l.Jvm = require("@self/classes/Jvm")
-
-function jvm4l.pretty_errors<A..., R...>(fn: (A...) -> R..., ...: A...): R...
-    local r: { any } = { pcall(fn, ...) }
-    local ok = table.remove(r, 1)
-    if ok then
-        return unpack(r)
-    end
-
-    local e = table.remove(r, 1)
-    if type(e) ~= "table" or e.__type ~= "JvmObject" then
-        error(tostring(e), 0)
-    end
-
-    local e: t.JvmObject = e
-    local jvm = e.jvm
-    local Throwable = jvm:resolve_class("java/lang/Throwable")
-    local message_ref = jvm:get_field_ref(Throwable, "message", "Ljava/lang/String;")
-    local message = e:get_field(message_ref) :: t.JvmObjectRef
-    local message_str = (message and message:inner_string()) or "no message given"
-    error(`{e.class.fqcn}: {message_str}`, 0)
-end
 
 return jvm4l

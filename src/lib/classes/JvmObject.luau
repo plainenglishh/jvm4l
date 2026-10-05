@@ -1,4 +1,5 @@
 local t = require("../t")
+local typechecker = require("../typechecker")
 local util = require("../util")
 
 local function hashcode_of(o: any)
@@ -92,6 +93,10 @@ end
 
 function JvmObject.set_field(self: t.JvmObject, field: t.FieldRef, value: t.JvmValue)
     assert(self:instance_of(field.class))
+    local field_info = self.class:resolve_field(field) or error("")
+    if not typechecker.check_field(self.jvm, value, self.class, field_info) then
+        self.jvm:throw_exception("java/lang/IllegalArgumentException")
+    end
     self._field_values[field] = value
 end
 
@@ -138,6 +143,10 @@ end
 function JvmObject.set_array_element(self: t.JvmObject, index: number, value: t.JvmValue)
     if not self._magic or self._magic.kind ~= "array" then
         error("not an array")
+    end
+
+    if not typechecker.check_value(value, self._magic.element) then
+        self.jvm:throw_exception("java/lang/IllegalArgumentException")
     end
 
     assert_array_bounds(self, index)

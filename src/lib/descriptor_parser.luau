@@ -1,7 +1,13 @@
+local str = require("../../.seal/typedefs/std/str")
 local t = require("./t")
 local descriptor_parser = {}
 
-function descriptor_parser.descriptor_to_field_type(jvm: t.Jvm, descriptor: string, i: number?): (t.JvmType, number)
+function descriptor_parser.resolve_descriptor(
+    jvm: t.Jvm,
+    descriptor: string,
+    loader: t.JvmClassLoader,
+    i: number?
+): (t.JvmType, number)
     local i = i or 1
 
     local first_char = string.sub(descriptor, i, i)
@@ -21,8 +27,6 @@ function descriptor_parser.descriptor_to_field_type(jvm: t.Jvm, descriptor: stri
         return "float", i + 1
     elseif first_char == "D" then
         return "double", i + 1
-    elseif first_char == "V" then
-        return "void", i + 1
     elseif first_char == "L" then
         local start = i
 
@@ -40,17 +44,21 @@ function descriptor_parser.descriptor_to_field_type(jvm: t.Jvm, descriptor: stri
         local name = string.sub(descriptor, start + 1, i - 1)
         return jvm:resolve_class(name), i + 1
     elseif first_char == "[" then
-        local _, new_i = descriptor_parser.descriptor_to_field_type(jvm, descriptor, i + 1)
-        return jvm:resolve_class(string.sub(descriptor, i + 1, new_i - 1)), new_i
+        local _, new_i = descriptor_parser.resolve_descriptor(jvm, descriptor, loader, i + 1)
+        return jvm:resolve_class(string.sub(descriptor, i + 1, new_i - 1), loader), new_i
     else
         error("invalid descriptor")
     end
 end
 
-function descriptor_parser.descriptor_to_method_type(jvm: t.Jvm, descriptor: string): ({ t.JvmType }, t.JvmType)
+function descriptor_parser.resolve_method_descriptor(
+    jvm: t.Jvm,
+    descriptor: string,
+    loader: t.JvmClassLoader
+): t.JvmMethodType
     assert(string.sub(descriptor, 1, 1) == "(", "invalid descriptor")
 
-    local args = {}
+    local arguments = {}
 
     local i = 2
 
@@ -60,14 +68,22 @@ function descriptor_parser.descriptor_to_method_type(jvm: t.Jvm, descriptor: str
             break
         end
 
-        local ty, new_i = descriptor_parser.descriptor_to_field_type(jvm, descriptor, i)
-        table.insert(args, ty)
+        local ty, new_i = descriptor_parser.resolve_descriptor(jvm, descriptor, loader, i)
+        table.insert(arguments, ty)
         i = new_i
     end
 
-    local ret = descriptor_parser.descriptor_to_field_type(jvm, descriptor, i)
+    local returns
+    if string.sub(descriptor, i, i) == "V" then
+        returns = "void"
+    else
+        returns = descriptor_parser.resolve_descriptor(jvm, descriptor, loader, i)
+    end
 
-    return args, ret
+    return {
+        arguments = arguments,
+        returns = returns,
+    }
 end
 
 function descriptor_parser.type_to_descriptor(ty: t.JvmType): string
@@ -87,8 +103,6 @@ function descriptor_parser.type_to_descriptor(ty: t.JvmType): string
         return "F"
     elseif ty == "double" then
         return "D"
-    elseif ty == "void" then
-        return "V"
     else
         if string.sub(ty.name, 1, 1) == "[" then
             return ty.name

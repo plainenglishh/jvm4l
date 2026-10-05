@@ -9,8 +9,8 @@ native_methods["java/lang/Object"] = {
 }
 
 native_methods["jvm4l/Luau"] = {
-    ["print:(Ljava/lang/Object;)V"] = function(_jvm: t.Jvm, o: t.JvmObject)
-        print(o)
+    ["print:([Ljava/lang/Object;)V"] = function(_jvm: t.Jvm, objects: t.JvmObject)
+        print(unpack(objects:get_array_elements()))
     end,
 }
 

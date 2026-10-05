@@ -158,8 +158,8 @@ function Jvm.new(link_native: t.LinkNativeCallback): t.Jvm
         _interned_field_refs = {},
     }, Jvm)
 
-    bootstrap_core_classes(self)
     self._gc = GarbageCollector._new(self)
+    bootstrap_core_classes(self)
 
     return self
 end
@@ -373,6 +373,16 @@ end
 function Jvm.throw_exception(self: t.Jvm, name: string, message: string?, cause: t.JvmObject?): never
     local e = self:create_exception(name, message, cause)
     error(e) -- Caught by the outer host if async, or the exec engine if inside bytecode
+end
+
+function Jvm.coerce(self: t.Jvm, value: t.IntoJvmValue): t.JvmValue
+    if type(value) == "boolean" then
+        return if value then 1 else 0
+    elseif type(value) == "string" then
+        return self:create_string(value)
+    else
+        return value
+    end
 end
 
 function Jvm.run(_self: t.Jvm, _main_path: string)
