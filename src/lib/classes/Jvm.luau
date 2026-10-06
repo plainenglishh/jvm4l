@@ -404,7 +404,7 @@ function Jvm.throw_exception(
     dont_capture_stack: boolean?
 ): never
     local e = self:create_exception(name, message, cause, dont_capture_stack)
-    error(e) -- Caught by the outer host if async, or the exec engine if inside bytecode
+    error(e, 0) -- Caught by the outer host if async, or the exec engine if inside bytecode
 end
 
 function Jvm.internal_error(self: t.Jvm, message: string, level: number?): never

@@ -132,6 +132,23 @@ export type GarbageCollector = setmetatable<
 --- Callback provided to GC implementations by the JVM to run finalisers on an object. Return value indicates whether to resurrect. Handles deallocation of classes under classloaders.
 export type GcFinalise = (object: JvmObject) -> boolean
 
+export type FrameContinuation =
+    {
+        kind: "return",
+        value: JvmValue,
+    }
+    | {
+        kind: "blocked",
+        waiting_for: Monitor,
+    }
+    | {
+        kind: "waiting",
+        timeout: number,
+    }
+    | {
+        kind: "preempted",
+    }
+
 --[=[
     A class representing a thread of execution in a JVM. 
     
@@ -155,17 +172,22 @@ export type JvmThread = setmetatable<{
 
 export type ThreadState = "new" | "runnable" | "blocked" | "waiting" | "timed_waiting" | "terminated"
 
-export type StackFrame = {
-    read jvm: Jvm,
-    read method: MethodInfo,
-    read class: JvmClass,
-    read loader: JvmObjectRef,
-    read code: MethodCode,
-    read stack: { JvmValue },
-    read locals: { JvmValue },
-    read pc: number,
-    -- Execeptions and debugging info later
-}
+export type StackFrame =
+    {
+        read method: MethodInfo,
+        read class: JvmClass,
+        read loader: JvmObjectRef,
+        read code: MethodCodeJava,
+        read stack: { JvmValue },
+        read locals: { JvmValue },
+        read pc: number,
+    }
+    | {
+        read method: MethodInfo,
+        read class: JvmClass,
+        read loader: JvmObjectRef,
+        read code: MethodCodeLuau,
+    }
 
 export type _InvocationResult =
     {
@@ -385,18 +407,21 @@ export type NativeMethod = (jvm: Jvm, ...JvmValue) -> JvmValue
 	This is independent of the `native` flag, a non-native synthetic method
 	may be implemented with a luau closure, and vice versa.
 ]=]
-export type MethodCode =
-    {
-        read kind: "luau",
-        read closure: NativeMethod,
-    }
-    | {
-        read kind: "java",
-        read code: buffer,
-    }
-    | {
-        read kind: "abstract",
-    }
+export type MethodCode = MethodCodeLuau | MethodCodeJava | MethodCodeAbstract
+
+export type MethodCodeLuau = {
+    read kind: "luau",
+    read closure: NativeMethod,
+}
+
+export type MethodCodeJava = {
+    read kind: "java",
+    read code: buffer,
+}
+
+export type MethodCodeAbstract = {
+    read kind: "abstract",
+}
 
 --// Classfile Types
 
