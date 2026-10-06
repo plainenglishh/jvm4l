@@ -1,3 +1,5 @@
+local t = require("./t")
+local util = require("./util")
 --[[
     design notes:
 
@@ -24,3 +26,47 @@
     6. native calls must check whether its target is complete *before* driving
        the execution engine, as a nested call may have completed its target.
 ]]
+
+local execution = {}
+
+export type ExecutionContinuation =
+    {
+        kind: "returned",
+        value: t.JvmValue,
+    }
+    | {
+        kind: "blocked",
+    } --- do the rest
+
+--[=[
+    Executes a single frame.
+]=]
+local function execute_frame(jvm: t.Jvm, frame: t.StackFrame): t.JvmValue
+    --- catch exceptions throw by `error` in here
+    return util.unimplemented()
+end
+
+--[=[
+    Selects a new thread to be executed. Sets `jvm.current_thread`.
+]=]
+local function schedule_new_thread(jvm: t.Jvm)
+    util.unimplemented()
+end
+
+--[=[
+    Drives execution until a given thread has reached a given stack level,
+    returning it's value.
+]=]
+function execution.run_until_frame_complete(jvm: t.Jvm, thread: t.JvmThread, level: number): t.JvmValue
+    return util.unimplemented()
+end
+
+--[=[
+    Drives execution until all non-daemon threads complete. Used for top-level
+    main invocation.
+]=]
+function execution.run_until_threads_complete(jvm: t.Jvm)
+    util.unimplemented()
+end
+
+return execution
