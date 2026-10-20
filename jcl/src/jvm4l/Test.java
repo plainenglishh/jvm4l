@@ -10,8 +10,20 @@ public class Test {
     }
 
     public static native void print_int(int value);
+    public static native void error();
+
+    public static int get_1() {
+        return 1;
+    }
 
     public static void main() {
-        print_int(1);
+        try {
+            print_int(1);
+            error();
+        } catch(jvm4l.LuauError e) {
+            print_int(2);
+        }
+
+        print_int(3);
     }
 }

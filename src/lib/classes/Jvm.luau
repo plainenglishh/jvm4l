@@ -491,7 +491,13 @@ function Jvm.coerce(self: t.Jvm, ...: t.IntoJvmValue): ...t.JvmValue
 end
 
 function Jvm.invoke(self: t.Jvm, class: t.JvmClass, method: t.MethodInfo, ...: t.JvmValue): t.JvmValue
-    return execution_engine.invoke(self, class, method)
+    local ret = { execution_engine.invoke(self, class, method) }
+    local ok = table.remove(ret, 1)
+    if not ok then
+        error(table.remove(ret, 1), 0)
+    end
+
+    return table.remove(ret, 1) :: t.JvmValue
 end
 
 function Jvm.run(self: t.Jvm, main_path: string, ...: t.JvmValue)

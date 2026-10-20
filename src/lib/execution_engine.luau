@@ -3,8 +3,10 @@ local JvmObject = require("./classes/JvmObject")
 local t = require("./t")
 
 --[[
-    Later improvements:
-    1. dont create a new execution driver for java -> java/luau invocations.
+    improvements wrt frame transitions:
+    native -> java = spin up a new nested exec engine (for sync value out)
+    java -> native = just push a frame
+    java -> java = just push a frame
 ]]
 
 local execution_engine = {}
@@ -34,7 +36,7 @@ local function try_reschedule(jvm: t.Jvm)
     -- todo: check if current quota reached, or if we're blocked, and pick a new thread
 end
 
-local function return_from_frame(thread: t.Thread, value: t.JvmValue)
+local function return_from_frame(thread: t.Thread, count: number, value: t.JvmValue)
     local frame = thread.stack[#thread.stack]
     local parent_frame = thread.stack[#thread.stack - 1]
 
@@ -53,6 +55,33 @@ local function read_u16be(b: buffer, offset: number): number
     return bit32.rshift(bit32.byteswap(buffer.readu16(b, offset)), 16)
 end
 
+local function get_method_ref_from_k(jvm: t.Jvm, classfile: t.Classfile, idx: number): (t.JvmClass, t.MethodRef)
+    local k = classfile.constant_pool
+    local methodref = k[idx]
+    if methodref.tag ~= "Methodref" then
+        error("expected Methodref")
+    end
+
+    local classref = k[methodref.class_index]
+    if classref.tag ~= "Class" then
+        error("expected Class")
+    end
+
+    local name_and_type = k[methodref.name_and_type_index]
+    if name_and_type.tag ~= "NameAndType" then
+        error("expected NameAndType")
+    end
+
+    local class_name, name, descriptor =
+        class_parser.class_name(classfile, classref),
+        class_parser.string_value(classfile, name_and_type.name_index),
+        class_parser.string_value(classfile, name_and_type.descriptor_index)
+
+    local class = jvm:resolve_class(class_name)
+    local method_ref = jvm:get_method_ref(class, name, descriptor)
+    return class, method_ref
+end
+
 --[=[ 
     Execute a single VM step (a native call, or a single bytecode instruction)
 
@@ -61,64 +90,65 @@ end
 ]=]
 local function step(jvm: t.Jvm)
     local thread = jvm.current_thread
-    local frame = thread.stack[#thread.stack]
-    if frame.code.kind == "luau" then
-        local value = frame.code.closure(jvm, unpack(frame.args))
-        return return_from_frame(thread, value)
+    local f = thread.stack[#thread.stack]
+    if f.code.kind == "luau" then
+        local value = f.code.closure(jvm, unpack(f.args))
+        return return_from_frame(thread, 1, value)
     end
 
-    local code = frame.code.code
-    local pc = frame.pc
-    local stack = frame.stack
-    local locals = frame.locals
-    local classfile = frame.class._classfile or error("expected classfile")
+    local code = f.code.code
+    local stack = f.stack
+    local locals = f.locals
+    local classfile = f.class._classfile or error("expected classfile")
     local k = classfile.constant_pool
 
-    local op = buffer.readu8(code, pc)
-    pc += 1
+    local start_pc = f.pc
+    local op = buffer.readu8(code, start_pc)
+    f.pc += 1
 
     if op >= 0x02 and op <= 0x8 then
         table.insert(stack, op - 0x03)
+    elseif op >= 0x4B and op <= 0x4E then
+        local idx = op - 0x4B
+        local ref = table.remove(stack)
+        locals[idx] = ref
     elseif op == 0xB8 then
-        local idx = read_u16be(code, pc)
-        pc += 2
+        local idx = read_u16be(code, f.pc)
+        f.pc += 2
 
-        local methodref = k[idx]
-        if methodref.tag ~= "Methodref" then
-            error("expected Methodref")
-        end
-
-        local classref = k[methodref.class_index]
-        if classref.tag ~= "Class" then
-            error("expected Class")
-        end
-
-        local name_and_type = k[methodref.name_and_type_index]
-        if name_and_type.tag ~= "NameAndType" then
-            error("expected NameAndType")
-        end
-
-        local class_name, name, descriptor =
-            class_parser.class_name(classfile, classref),
-            class_parser.string_value(classfile, name_and_type.name_index),
-            class_parser.string_value(classfile, name_and_type.descriptor_index)
-
-        local class = jvm:resolve_class(class_name)
-        local method_ref = jvm:get_method_ref(class, name, descriptor)
+        local class, method_ref = get_method_ref_from_k(jvm, classfile, idx)
         local method_info = class:resolve_method(method_ref) or error("unable to resolve method")
         local args = { table.remove(stack) } -- one arg for now
 
-        local value = execution_engine.invoke(jvm, class, method_info, unpack(args))
-        if value then
+        local ok, value = execution_engine.invoke(jvm, class, method_info, unpack(args))
+        if not ok then
+            f.pc = start_pc
+            error(value, 0)
+        end
+
+        if value ~= nil then
             table.insert(stack, value)
         end
-    elseif op == 0xB1 then
-        return_from_frame(thread, nil)
-    else
-        error(`invalid opcode {op}`)
-    end
+        return
+    elseif op == 0xAC then -- ireturn
+        return_from_frame(thread, 1, table.remove(stack))
+        return
+    elseif op == 0xB1 then -- return
+        return_from_frame(thread, 0, nil)
+        return
+    elseif op == 0xA7 then -- goto
+        local raw_offset = read_u16be(code, f.pc)
+        f.pc += 2
 
-    frame.pc = pc
+        local offset = bit32.arshift(bit32.lshift(raw_offset, 16), 16)
+        f.pc = start_pc + offset
+    else
+        jvm:throw_exception("java/lang/InternalError", `invalid opcode {op}`)
+    end
+end
+
+local function is_exception(value: any): boolean
+    return type(value) == "table" and getmetatable(value) == JvmObject
 end
 
 --[=[
@@ -130,6 +160,8 @@ end
 ]=]
 local function execute(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
     jvm._exec_depth += 1
+    --print(`spinning up exec engine on target {target}, new depth {jvm._exec_depth}`)
+
     while true do
         if target.state == "complete" then
             jvm._exec_depth -= 1
@@ -144,18 +176,18 @@ local function execute(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
         thread.budget -= 1
 
         local ok, exception = pcall(step, jvm)
-        if type(exception) ~= "table" and getmetatable(exception) ~= JvmObject then
-            exception = jvm:create_exception("jvm4l/LuauError", tostring(exception))
-        end
-        local exception = exception :: t.JvmObject
 
         if not ok then
+            local exception: t.JvmObject = if is_exception(exception)
+                then exception :: t.JvmObject
+                else jvm:create_exception("jvm4l/LuauError", tostring(exception))
+
             local caught = false
 
             for i = #thread.stack, 1, -1 do
                 local frame = thread.stack[i]
                 if frame.code.kind == "java" then
-                    for _, exception_info in frame.code.exceptions do
+                    for i, exception_info in frame.code.exceptions do
                         if frame.pc < exception_info.start_pc or frame.pc >= exception_info.end_pc then
                             continue
                         end
@@ -172,6 +204,8 @@ local function execute(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
                         break
                     end
                 else
+                    thread.stack[i] = nil
+                    jvm._exec_depth -= 1
                     return false, exception
                 end
 
@@ -197,7 +231,12 @@ end
 --[=[
     Invokes a method.
 ]=]
-function execution_engine.invoke(jvm: t.Jvm, class: t.JvmClass, method: t.MethodInfo, ...: t.JvmValue): t.JvmValue
+function execution_engine.invoke(
+    jvm: t.Jvm,
+    class: t.JvmClass,
+    method: t.MethodInfo,
+    ...: t.JvmValue
+): (boolean, t.JvmValue)
     if method.code.kind == "abstract" then
         jvm:throw_exception("java/lang/AbstractMethodError", method.descriptor)
         error("^")
@@ -233,11 +272,7 @@ function execution_engine.invoke(jvm: t.Jvm, class: t.JvmClass, method: t.Method
     end
 
     table.insert(jvm.current_thread.stack, frame)
-    local ok, value_or_exception = execute(jvm, invocation)
-    if not ok then
-        error(value_or_exception, 0)
-    end
-    return value_or_exception
+    return execute(jvm, invocation)
 end
 
 return execution_engine
