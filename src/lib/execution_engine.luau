@@ -1,6 +1,6 @@
+local class_parser = require("./class_parser")
 local JvmObject = require("./classes/JvmObject")
 local t = require("./t")
-local util = require("./util")
 
 --[[
     Later improvements:
@@ -34,6 +34,25 @@ local function try_reschedule(jvm: t.Jvm)
     -- todo: check if current quota reached, or if we're blocked, and pick a new thread
 end
 
+local function return_from_frame(thread: t.Thread, value: t.JvmValue)
+    local frame = thread.stack[#thread.stack]
+    local parent_frame = thread.stack[#thread.stack - 1]
+
+    if frame.invocation then
+        complete_invocation(frame.invocation, value)
+    end
+
+    thread.stack[#thread.stack] = nil
+
+    --if parent_frame and parent_frame.code.kind == "java" then
+    --    table.insert(parent_frame.stack, value)
+    --end
+end
+
+local function read_u16be(b: buffer, offset: number): number
+    return bit32.rshift(bit32.byteswap(buffer.readu16(b, offset)), 16)
+end
+
 --[=[ 
     Execute a single VM step (a native call, or a single bytecode instruction)
 
@@ -43,6 +62,63 @@ end
 local function step(jvm: t.Jvm)
     local thread = jvm.current_thread
     local frame = thread.stack[#thread.stack]
+    if frame.code.kind == "luau" then
+        local value = frame.code.closure(jvm, unpack(frame.args))
+        return return_from_frame(thread, value)
+    end
+
+    local code = frame.code.code
+    local pc = frame.pc
+    local stack = frame.stack
+    local locals = frame.locals
+    local classfile = frame.class._classfile or error("expected classfile")
+    local k = classfile.constant_pool
+
+    local op = buffer.readu8(code, pc)
+    pc += 1
+
+    if op >= 0x02 and op <= 0x8 then
+        table.insert(stack, op - 0x03)
+    elseif op == 0xB8 then
+        local idx = read_u16be(code, pc)
+        pc += 2
+
+        local methodref = k[idx]
+        if methodref.tag ~= "Methodref" then
+            error("expected Methodref")
+        end
+
+        local classref = k[methodref.class_index]
+        if classref.tag ~= "Class" then
+            error("expected Class")
+        end
+
+        local name_and_type = k[methodref.name_and_type_index]
+        if name_and_type.tag ~= "NameAndType" then
+            error("expected NameAndType")
+        end
+
+        local class_name, name, descriptor =
+            class_parser.class_name(classfile, classref),
+            class_parser.string_value(classfile, name_and_type.name_index),
+            class_parser.string_value(classfile, name_and_type.descriptor_index)
+
+        local class = jvm:resolve_class(class_name)
+        local method_ref = jvm:get_method_ref(class, name, descriptor)
+        local method_info = class:resolve_method(method_ref) or error("unable to resolve method")
+        local args = { table.remove(stack) } -- one arg for now
+
+        local value = execution_engine.invoke(jvm, class, method_info, unpack(args))
+        if value then
+            table.insert(stack, value)
+        end
+    elseif op == 0xB1 then
+        return_from_frame(thread, nil)
+    else
+        error(`invalid opcode {op}`)
+    end
+
+    frame.pc = pc
 end
 
 --[=[
@@ -71,15 +147,48 @@ local function execute(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
         if type(exception) ~= "table" and getmetatable(exception) ~= JvmObject then
             exception = jvm:create_exception("jvm4l/LuauError", tostring(exception))
         end
+        local exception = exception :: t.JvmObject
 
         if not ok then
+            local caught = false
+
             for i = #thread.stack, 1, -1 do
                 local frame = thread.stack[i]
                 if frame.code.kind == "java" then
+                    for _, exception_info in frame.code.exceptions do
+                        if frame.pc < exception_info.start_pc or frame.pc >= exception_info.end_pc then
+                            continue
+                        end
+
+                        if
+                            exception_info.catch_type ~= nil and not exception:instance_of(exception_info.catch_type)
+                        then
+                            continue
+                        end
+
+                        table.insert(frame.stack, exception)
+                        frame.pc = exception_info.handler_pc
+                        caught = true
+                        break
+                    end
+                else
+                    return false, exception
+                end
+
+                if caught then
+                    break
                 end
 
                 if frame.invocation then
+                    fail_invocation(frame.invocation, exception)
                 end
+
+                thread.stack[i] = nil
+            end
+
+            if #thread.stack == 0 then
+                --- do some better handling here l&r.
+                thread.state = "terminated"
             end
         end
     end

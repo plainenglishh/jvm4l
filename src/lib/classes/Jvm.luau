@@ -1,6 +1,7 @@
 local typecheck = require("../../../oldsrc/jvm/typecheck")
 local class_parser = require("../class_parser")
 local descriptor_parser = require("../descriptor_parser")
+local execution_engine = require("../execution_engine")
 local jcl_classfiles = require("../jcl_classfiles")
 local native_methods = require("../native_methods")
 local t = require("../t")
@@ -22,20 +23,8 @@ function Jvm.__display(self: t.Jvm): string
 end
 
 local function link_native(self: t.Jvm, class_name: string, signature: string): t.NativeMethod?
-    print(class_name, signature)
-    if
-        string.match(class_name, "^java/")
-        or string.match(class_name, "^jvm4l/")
-        or (
-            string.match(class_name, "^sun/")
-            and class_name ~= ""
-            and signature ~= "fetchAppClassBytes(Ljava/lang/String;)[B"
-        )
-    then
-        return native_methods[class_name] and native_methods[class_name][signature]
-    end
-
-    return self._settings.link_native(class_name, signature)
+    return (native_methods[class_name] and native_methods[class_name][signature])
+        or self._settings.link_native(class_name, signature)
 end
 
 local function get_members(
@@ -501,7 +490,13 @@ function Jvm.coerce(self: t.Jvm, ...: t.IntoJvmValue): ...t.JvmValue
     return unpack(values)
 end
 
-function Jvm.run(self: t.Jvm, main_path: string, ...: t.JvmValue) end
+function Jvm.invoke(self: t.Jvm, class: t.JvmClass, method: t.MethodInfo, ...: t.JvmValue): t.JvmValue
+    return execution_engine.invoke(self, class, method)
+end
+
+function Jvm.run(self: t.Jvm, main_path: string, ...: t.JvmValue)
+    util.unimplemented()
+end
 
 table.freeze(Jvm)
 

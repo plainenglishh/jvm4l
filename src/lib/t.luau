@@ -107,6 +107,8 @@ export type Jvm = setmetatable<
 
         coerce: (self: Jvm, ...IntoJvmValue) -> ...JvmValue,
 
+        invoke: (self: Jvm, class: JvmClass, method: MethodInfo, ...JvmValue) -> JvmValue,
+
         --[=[
 			Executes `main_path`.
 		]=]
@@ -426,7 +428,7 @@ export type Exception = {
     start_pc: number,
     end_pc: number,
     handler_pc: number,
-    catch_type: JvmObject?,
+    catch_type: JvmClass?,
 }
 
 export type MethodCodeAbstract = {

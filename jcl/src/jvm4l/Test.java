@@ -9,11 +9,9 @@ public class Test {
         throw new AssertionError();
     }
 
+    public static native void print_int(int value);
+
     public static void main() {
-        try {
-            jvm4l.Luau.error("Hello, World!");
-        } catch (Exception e) {
-            jvm4l.Luau.print("whoops");
-        }
+        print_int(1);
     }
 }
