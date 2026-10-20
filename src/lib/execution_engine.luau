@@ -7,16 +7,20 @@ local t = require("./t")
     native -> java = spin up a new nested exec engine (for sync value out)
     java -> native = just push a frame
     java -> java = just push a frame
+
+    ensure stack, kpool & locals account for 2-slot items (long & double)
 ]]
 
 local execution_engine = {}
 
+--- Marks an invocation as failed.
 local function fail_invocation(invocation: t.Invocation, exception: t.JvmObject)
     local invocation = invocation :: any
     invocation.state = "failed"
     invocation.exception = exception
 end
 
+--- Marks an invocation as complete.
 local function complete_invocation(invocation: t.Invocation, value: t.JvmValue)
     local invocation = invocation :: any
     invocation.state = "complete"
@@ -91,9 +95,11 @@ end
 local function step(jvm: t.Jvm)
     local thread = jvm.current_thread
     local f = thread.stack[#thread.stack]
+    local method = f.method
+
     if f.code.kind == "luau" then
         local value = f.code.closure(jvm, unpack(f.args))
-        return return_from_frame(thread, 1, value)
+        return return_from_frame(thread, method.ret_count, value)
     end
 
     local code = f.code.code

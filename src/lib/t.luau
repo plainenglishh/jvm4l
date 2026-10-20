@@ -378,6 +378,8 @@ export type MethodInfo = {
     read descriptor: string,
     read signature: string,
     read code: MethodCode,
+    read arg_count: number,
+    read ret_count: number,
 
     read public: boolean,
     read private: boolean,

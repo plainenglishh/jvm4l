@@ -1,6 +1,48 @@
 local t = require("./t")
 local descriptor_parser = {}
 
+function descriptor_parser.arg_count(descriptor: string): number
+    local count = 0
+    local len = #descriptor
+    local i = 1
+
+    while i <= len and string.sub(descriptor, i, i) ~= "(" do
+        i += 1
+    end
+    i += 1
+
+    while i <= len do
+        local char = string.sub(descriptor, i, i)
+        if char == ")" then
+            break
+        end
+
+        if char == "[" then
+            i += 1
+            continue
+        elseif char == "L" then
+            i += 1
+            while i <= len and string.sub(descriptor, i, i) ~= ";" do
+                i += 1
+            end
+            count += 1
+            i += 1
+        elseif char == "J" or char == "D" then
+            count += 2
+            i += 1
+        else
+            count += 1
+            i += 1
+        end
+    end
+
+    return count
+end
+
+function descriptor_parser.ret_count(descriptor: string): number
+    return if descriptor:sub(#descriptor, #descriptor) == "V" then 0 else 1
+end
+
 function descriptor_parser.resolve_descriptor(
     jvm: t.Jvm,
     descriptor: string,

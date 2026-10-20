@@ -93,6 +93,8 @@ local function get_members(
             descriptor = descriptor,
             signature = signature,
             code = code,
+            arg_count = descriptor_parser.arg_count(descriptor),
+            ret_count = descriptor_parser.ret_count(descriptor),
 
             public = bit32.band(method.access_flags, 0x0001) ~= 0,
             private = bit32.band(method.access_flags, 0x0002) ~= 0,
