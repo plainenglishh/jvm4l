@@ -1,3 +1,4 @@
+local typecheck = require("../../../oldsrc/jvm/typecheck")
 local class_parser = require("../class_parser")
 local descriptor_parser = require("../descriptor_parser")
 local jcl_classfiles = require("../jcl_classfiles")
@@ -21,14 +22,27 @@ function Jvm.__display(self: t.Jvm): string
 end
 
 local function link_native(self: t.Jvm, class_name: string, signature: string): t.NativeMethod?
-    if string.match(class_name, "^java/") or string.match(class_name, "^jvm4l/") then
+    print(class_name, signature)
+    if
+        string.match(class_name, "^java/")
+        or string.match(class_name, "^jvm4l/")
+        or (
+            string.match(class_name, "^sun/")
+            and class_name ~= ""
+            and signature ~= "fetchAppClassBytes(Ljava/lang/String;)[B"
+        )
+    then
         return native_methods[class_name] and native_methods[class_name][signature]
     end
 
-    return self._link_user_native(class_name, signature)
+    return self._settings.link_native(class_name, signature)
 end
 
-local function get_members(jvm: t.Jvm, classfile: t.Classfile): ({ t.MethodInfo }, { t.FieldInfo })
+local function get_members(
+    jvm: t.Jvm,
+    classfile: t.Classfile,
+    defining_loader: t.JvmClassLoader
+): ({ t.MethodInfo }, { t.FieldInfo })
     local class_name = class_parser.class_name(classfile, class_parser.class(classfile, classfile.this_class))
 
     local methods: { t.MethodInfo } = {}
@@ -55,8 +69,34 @@ local function get_members(jvm: t.Jvm, classfile: t.Classfile): ({ t.MethodInfo 
         elseif abstract then
             code = { kind = "abstract" }
         else
-            -- TODO: extract code info
-            code = { kind = "abstract" }
+            local code_attribute = class_parser.get_code_attribute(classfile, method)
+                or jvm:throw_exception("java/lang/ClassFormatError")
+
+            local exceptions = {}
+
+            for _, exception_info in code_attribute.exceptions do
+                local catch_type = nil
+                if exception_info.catch_type ~= 0 then
+                    local class_info = class_parser.class(classfile, exception_info.catch_type)
+                    local class_name = class_parser.class_name(classfile, class_info)
+                    catch_type = jvm:resolve_class(class_name, defining_loader)
+                end
+
+                table.insert(exceptions, {
+                    start_pc = exception_info.start_pc,
+                    end_pc = exception_info.end_pc,
+                    handler_pc = exception_info.handler_pc,
+                    catch_type = catch_type,
+                })
+            end
+
+            code = {
+                kind = "java",
+                max_stack = code_attribute.max_stack,
+                max_locals = code_attribute.max_locals,
+                code = code_attribute.code,
+                exceptions = exceptions,
+            }
         end
 
         table.insert(methods, {
@@ -108,7 +148,7 @@ end
 
 local function bootstrap_core_classes(self: t.Jvm)
     local object_classfile = class_parser.parse(jcl_classfiles["java/lang/Object"])
-    local object_methods, object_fields = get_members(self, object_classfile)
+    local object_methods, object_fields = get_members(self, object_classfile, "bootstrap")
 
     local object = JvmClass._allocate(
         self,
@@ -123,7 +163,7 @@ local function bootstrap_core_classes(self: t.Jvm)
     self._classes.bootstrap["java/lang/Object"] = object
 
     local class_classfile = class_parser.parse(jcl_classfiles["java/lang/Class"])
-    local class_methods, class_fields = get_members(self, class_classfile)
+    local class_methods, class_fields = get_members(self, class_classfile, "bootstrap")
 
     local class = JvmClass._allocate(
         self,
@@ -148,15 +188,22 @@ local function bootstrap_core_classes(self: t.Jvm)
     self:resolve_class("java/lang/Thread")
 end
 
-function Jvm.new(link_native: t.LinkNativeCallback): t.Jvm
+function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
+    local settings = {
+        quantum = into_settings.quantum or 500,
+        interrupt = into_settings.interrupt,
+        link_native = into_settings.link_native,
+    }
+
     local self: t.Jvm = setmetatable({
+        _settings = settings,
         _classes = {
             bootstrap = {},
         },
         _threads = {},
-        current_thread = nil,
+        current_thread = (nil :: any) :: t.Thread,
+        _exec_depth = 0,
         _gc = (nil :: any) :: t.GarbageCollector,
-        _link_user_native = link_native,
         _interned_strings = {},
         _interned_method_refs = {},
         _interned_field_refs = {},
@@ -164,17 +211,38 @@ function Jvm.new(link_native: t.LinkNativeCallback): t.Jvm
 
     self._gc = GarbageCollector._new(self)
     bootstrap_core_classes(self)
+    self.current_thread = self:_create_thread(false)
 
     return self
 end
 
+function Jvm._interrupt(self: t.Jvm)
+    if self._settings.interrupt then
+        self._settings.interrupt(self)
+    end
+end
+
+function Jvm._create_thread(self: t.Jvm, daemon: boolean): t.Thread
+    local thread: t.Thread = {
+        stack = {},
+        state = "new",
+        daemon = daemon,
+        mirror = (nil :: any) :: t.JvmObject,
+        budget = 0,
+    }
+    local mirror = self._classes.bootstrap["java/lang/Thread"]:new_uninitialised({ kind = "thread", value = thread })
+    thread.mirror = mirror
+    table.insert(self._threads, thread)
+    return thread
+end
+
 function Jvm.get_loader(self: t.Jvm): t.JvmClassLoader
     local thread = self.current_thread
-    if not thread or #thread._stack == 0 then
+    if not thread or #thread.stack == 0 then
         return "bootstrap"
     end
 
-    local root_frame = thread._stack[#thread._stack]
+    local root_frame = thread.stack[#thread.stack]
     return root_frame.class.loader
 end
 
@@ -266,7 +334,7 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
         table.insert(implements, interface)
     end
 
-    local methods, fields = get_members(self, classfile)
+    local methods, fields = get_members(self, classfile, defining_loader)
     local class =
         JvmClass._allocate(self, defining_loader, this_class_name, super_class, implements, methods, fields, classfile)
     register_class(self, defining_loader, class)
@@ -381,7 +449,7 @@ function Jvm.create_exception(
 
     local magic: t._MagicValue?
     if (not dont_capture_stack) and self.current_thread then
-        magic = { kind = "throwable", stack = table.clone(self.current_thread._stack) }
+        magic = { kind = "throwable", stack = table.clone(self.current_thread.stack) }
     end
 
     local e = Exception:new_uninitialised(magic)
@@ -433,9 +501,7 @@ function Jvm.coerce(self: t.Jvm, ...: t.IntoJvmValue): ...t.JvmValue
     return unpack(values)
 end
 
-function Jvm.run(_self: t.Jvm, _main_path: string)
-    util.unimplemented()
-end
+function Jvm.run(self: t.Jvm, main_path: string, ...: t.JvmValue) end
 
 table.freeze(Jvm)
 

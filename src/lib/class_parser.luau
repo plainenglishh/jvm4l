@@ -1,7 +1,60 @@
+--!native
+
 local t = require("./t")
 local class_parser = {}
 
+local function read_u16be(b: buffer, offset: number): number
+    return bit32.rshift(bit32.byteswap(buffer.readu16(b, offset)), 16)
+end
+
+local function read_u32be(b: buffer, offset: number): number
+    return bit32.byteswap(buffer.readu32(b, offset))
+end
+
 local scratch = buffer.create(8)
+
+local function read_f32be(b: buffer, offset: number): number
+    for i = 0, 3 do
+        buffer.writeu8(scratch, i, buffer.readu8(b, offset + (3 - i)))
+    end
+    return buffer.readf32(scratch, 0)
+end
+
+local function read_f64be(b: buffer, offset: number): number
+    for i = 0, 7 do
+        buffer.writeu8(scratch, i, buffer.readu8(b, offset + (7 - i)))
+    end
+    return buffer.readf64(scratch, 0)
+end
+
+local function read_integerbe(b: buffer, offset: number): integer
+    for i = 0, 7 do
+        buffer.writeu8(scratch, i, buffer.readu8(b, offset + (7 - i)))
+    end
+    return buffer.readinteger(scratch, 0)
+end
+
+local function read_attribute_infos(b: buffer, offset: number): ({ t.CfAttributeInfo }, number)
+    local attribute_count = read_u16be(b, offset)
+    offset += 2
+    local attributes = {}
+    for i = 1, attribute_count do
+        local name_index = read_u16be(b, offset)
+        local attribute_length = read_u32be(b, offset + 2)
+
+        local data = buffer.create(attribute_length)
+        buffer.copy(data, 0, b, offset + 6, attribute_length)
+
+        offset += 6 + attribute_length
+
+        table.insert(attributes, {
+            name_index = name_index,
+            data = data,
+        })
+    end
+
+    return attributes, offset
+end
 
 function class_parser.parse(b: buffer): t.Classfile
     local cursor = 0
@@ -13,39 +66,33 @@ function class_parser.parse(b: buffer): t.Classfile
     end
 
     local function read_u16(): number
-        local value = buffer.readu16(b, cursor)
+        local value = read_u16be(b, cursor)
         cursor += 2
-        return bit32.rshift(bit32.byteswap(value), 16)
+        return value
     end
 
     local function read_u32(): number
-        local value = buffer.readu32(b, cursor)
+        local value = read_u32be(b, cursor)
         cursor += 4
-        return bit32.byteswap(value)
+        return value
     end
 
     local function read_f32(): number
-        for i = 0, 3 do
-            buffer.writeu8(scratch, i, buffer.readu8(b, cursor + (3 - i)))
-        end
+        local value = read_f32be(b, cursor)
         cursor += 4
-        return buffer.readf32(scratch, 0)
+        return value
     end
 
     local function read_f64(): number
-        for i = 0, 7 do
-            buffer.writeu8(scratch, i, buffer.readu8(b, cursor + (7 - i)))
-        end
+        local value = read_f64be(b, cursor)
         cursor += 8
-        return buffer.readf64(scratch, 0)
+        return value
     end
 
     local function read_integer(): integer
-        for i = 0, 7 do
-            buffer.writeu8(scratch, i, buffer.readu8(b, cursor + (7 - i)))
-        end
+        local value = read_integerbe(b, cursor)
         cursor += 8
-        return buffer.readinteger(scratch, 0)
+        return value
     end
 
     local function read_string(length: number): string
@@ -154,27 +201,13 @@ function class_parser.parse(b: buffer): t.Classfile
         end
     end
 
-    local function read_attribute_info(): t.CfAttributeInfo
-        local name_index = read_u16()
-        local attribute_length = read_u32()
-        local info = read_buffer(attribute_length)
-
-        return {
-            name_index = name_index,
-            data = info,
-        }
-    end
-
     local function read_field_info(): t.CfFieldInfo
         local access_flags = read_u16()
         local name_index = read_u16()
         local descriptor_index = read_u16()
 
-        local attributes_count = read_u16()
-        local attributes = table.create(attributes_count) :: { t.CfAttributeInfo }
-        for i = 1, attributes_count do
-            attributes[i] = read_attribute_info()
-        end
+        local attributes, new_cursor = read_attribute_infos(b, cursor)
+        cursor = new_cursor
 
         return {
             access_flags = access_flags,
@@ -189,11 +222,8 @@ function class_parser.parse(b: buffer): t.Classfile
         local name_index = read_u16()
         local descriptor_index = read_u16()
 
-        local attributes_count = read_u16()
-        local attributes = table.create(attributes_count) :: { t.CfAttributeInfo }
-        for i = 1, attributes_count do
-            attributes[i] = read_attribute_info()
-        end
+        local attributes, new_cursor = read_attribute_infos(b, cursor)
+        cursor = new_cursor
 
         return {
             access_flags = access_flags,
@@ -245,11 +275,8 @@ function class_parser.parse(b: buffer): t.Classfile
             methods[i] = read_method_info()
         end
 
-        local attributes_count = read_u16()
-        local attributes = table.create(attributes_count) :: { t.CfAttributeInfo }
-        for i = 1, attributes_count do
-            attributes[i] = read_attribute_info()
-        end
+        local attributes, new_cursor = read_attribute_infos(b, cursor)
+        cursor = new_cursor
 
         return {
             minor_version = minor_version,
@@ -284,6 +311,84 @@ function class_parser.string_value(classfile: t.Classfile, idx: number): string
     local utf8 = classfile.constant_pool[idx]
     assert(utf8.tag == "Utf8")
     return utf8.value
+end
+
+function class_parser.get_utf8_idx(classfile: t.Classfile, str: string): number?
+    for idx, k in classfile.constant_pool do
+        if k.tag == "Utf8" and k.value == str then
+            return idx
+        end
+    end
+
+    return nil
+end
+
+function class_parser.get_attribute_info(
+    classfile: t.Classfile,
+    attributes: { t.CfAttributeInfo },
+    name: string
+): t.CfAttributeInfo?
+    for _, attribute in attributes do
+        if class_parser.string_value(classfile, attribute.name_index) == name then
+            return attribute
+        end
+    end
+
+    return nil
+end
+
+function class_parser.get_code_attribute(classfile: t.Classfile, method: t.CfMethodInfo): t.CfCodeAttribute?
+    local attribute = class_parser.get_attribute_info(classfile, method.attributes, "Code")
+    if not attribute then
+        return nil
+    end
+
+    local b = attribute.data
+    local cursor = 0
+
+    local max_stack = read_u16be(b, cursor)
+    cursor += 2
+    local max_locals = read_u16be(b, cursor)
+    cursor += 2
+    local code_length = read_u32be(b, cursor)
+    cursor += 4
+
+    local code = buffer.create(code_length)
+    buffer.copy(code, 0, b, cursor, code_length)
+    cursor += code_length
+
+    local exception_count = read_u16be(b, cursor)
+    cursor += 2
+    local exceptions = {}
+
+    for i = 1, exception_count do
+        local start_pc = read_u16be(b, cursor)
+        cursor += 2
+        local end_pc = read_u16be(b, cursor)
+        cursor += 2
+        local handler_pc = read_u16be(b, cursor)
+        cursor += 2
+        local catch_type = read_u16be(b, cursor)
+        cursor += 2
+
+        table.insert(exceptions, {
+            start_pc = start_pc,
+            end_pc = end_pc,
+            handler_pc = handler_pc,
+            catch_type = catch_type,
+        })
+    end
+
+    local attributes = read_attribute_infos(b, cursor)
+
+    return {
+        max_stack = max_stack,
+        max_locals = max_locals,
+        code_length = code_length,
+        code = code,
+        exceptions = exceptions,
+        attributes = attributes,
+    }
 end
 
 return class_parser

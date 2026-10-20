@@ -14,7 +14,11 @@ local EXCEPTIONS: { [string]: string } = {
     IndexOutOfBoundsException = "RuntimeException",
     ArrayIndexOutOfBoundsException = "IndexOutOfBoundsException",
     IllegalStateException = "RuntimeException",
+    IllegalMonitorStateException = "RuntimeException",
     UnsupportedOperationException = "RuntimeException",
+
+    ReflectiveOperationException = "Exception",
+    ClassNotFoundException = "ReflectiveOperationException",
 
     StackOverflowError = "VirtualMachineError",
     OutOfMemoryError = "VirtualMachineError",
@@ -23,6 +27,10 @@ local EXCEPTIONS: { [string]: string } = {
     LinkageError = "Error",
     UnsatisfiedLinkError = "LinkageError",
     NoClassDefFoundError = "LinkageError",
+    ClassFormatError = "LinkageError",
+
+    IncompatibleClassChangeError = "LinkageError",
+    AbstractMethodError = "IncompatibleClassChangeError",
 
     AssertionError = "Error",
 }
@@ -120,7 +128,7 @@ fs.writeStringToFile("src/lib/jcl_classfiles.luau", table.concat(out))
 
 print("--- building docs")
 local docs_r = process.system(
-    'javadoc -source 1.8 -bootclasspath "" -sourcepath jcl/src -d jcl/docs -quiet -notimestamp -subpackages java:jvm4l',
+    'javadoc -source 1.8 -bootclasspath "" -sourcepath jcl/src -d jcl/docs -quiet -notimestamp -subpackages java:jvm4l:sun -private',
     { stdio = "inherit" }
 )
 

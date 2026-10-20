@@ -13,7 +13,7 @@ native_methods["java/lang/Throwable"] = {
         local stack: { t.StackFrame } = {}
 
         if jvm.current_thread then
-            table.move(jvm.current_thread._stack, 1, #jvm.current_thread._stack - skip, 1, stack)
+            table.move(jvm.current_thread.stack, 1, #jvm.current_thread.stack - skip, 1, stack)
         end
 
         this._magic = { kind = "throwable", stack = stack }
@@ -52,9 +52,7 @@ native_methods["jvm4l/Luau"] = {
     ["print:([Ljava/lang/Object;)V"] = function(_jvm: t.Jvm, objects: t.JvmObject)
         print(unpack(objects:get_array_elements()))
     end,
-}
 
-native_methods["jvm4l/Luau"] = {
     ["error:(Ljava/lang/Object;I)V"] = function(_jvm: t.Jvm, o: t.JvmObject, level: t.JvmInt)
         error(o, level)
     end,

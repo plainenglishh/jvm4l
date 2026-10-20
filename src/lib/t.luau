@@ -54,11 +54,13 @@ export type JvmMethodType = {
 ]=]
 export type Jvm = setmetatable<
     {
+        read _settings: JvmSettings,
         read _classes: { [JvmClassLoader]: { [string]: JvmClass } },
-        read _threads: { JvmThread },
-        read current_thread: JvmThread?,
+        read _threads: { Thread },
+        current_thread: Thread,
+        _exec_depth: number,
+
         _gc: GarbageCollector,
-        _link_user_native: LinkNativeCallback,
         read _interned_strings: { [string]: JvmObject },
         read _interned_method_refs: { [JvmClass]: { [string]: { [string]: MethodRef } } },
         read _interned_field_refs: { [JvmClass]: { [string]: { [string]: FieldRef } } },
@@ -69,7 +71,11 @@ export type Jvm = setmetatable<
         __tostring: (self: Jvm) -> string,
         __display: (self: Jvm) -> string,
 
-        new: (link_native: LinkNativeCallback) -> Jvm,
+        new: (settings: IntoJvmSettings) -> Jvm,
+
+        _create_thread: (self: Jvm, daemon: boolean) -> Thread,
+        _interrupt: (self: Jvm) -> (),
+
         get_loader: (self: Jvm) -> JvmClassLoader,
         get_class: (self: Jvm, name: string, initiating_loader: JvmClassLoader?) -> JvmClass?,
         resolve_class: (self: Jvm, name: string, initiating_loader: JvmClassLoader?) -> JvmClass,
@@ -104,11 +110,24 @@ export type Jvm = setmetatable<
         --[=[
 			Executes `main_path`.
 		]=]
-        run: (self: Jvm, main_path: string) -> (), -- loads the class and invokes main on it
+        run: (self: Jvm, main_path: string, ...JvmValue) -> (), -- loads the class and invokes main on it
     }
 >
 
+export type IntoJvmSettings = {
+    quantum: number?,
+    interrupt: InterruptCallback?,
+    link_native: LinkNativeCallback,
+}
+
+export type JvmSettings = {
+    quantum: number,
+    interrupt: InterruptCallback?,
+    link_native: LinkNativeCallback,
+}
+
 export type LinkNativeCallback = (class_name: string, signature: string) -> NativeMethod?
+export type InterruptCallback = (jvm: Jvm) -> ()
 
 --- A reference to a class loader. Either "bootstrap", or a reference to a user-defined loader.
 export type JvmClassLoader = "bootstrap" | JvmObject
@@ -132,82 +151,63 @@ export type GarbageCollector = setmetatable<
 --- Callback provided to GC implementations by the JVM to run finalisers on an object. Return value indicates whether to resurrect. Handles deallocation of classes under classloaders.
 export type GcFinalise = (object: JvmObject) -> boolean
 
-export type FrameContinuation =
-    {
-        kind: "return",
-        value: JvmValue,
-    }
-    | {
-        kind: "blocked",
-        waiting_for: Monitor,
-    }
-    | {
-        kind: "waiting",
-        timeout: number,
-    }
-    | {
-        kind: "preempted",
-    }
-
 --[=[
     A class representing a thread of execution in a JVM. 
     
     This is a handler owned by the root Jvm that handles the dispatching of 
     methods to its internal thread.
 ]=]
-export type JvmThread = setmetatable<{
-    read jvm: Jvm,
-    read _stack: { StackFrame },
-    _state: ThreadState,
-    _daemon: boolean,
-    _mirror: JvmObject,
-}, {
-    __type: "JvmThread",
-    __index: getmetatable<JvmThread>,
-    __tostring: (self: JvmThread) -> string,
-    __display: (self: JvmThread) -> string,
-
-    _allocate: (jvm: Jvm) -> JvmThread,
-}>
-
+export type Thread = {
+    stack: { StackFrame },
+    state: ThreadState,
+    daemon: boolean,
+    mirror: JvmObject,
+    budget: number,
+    waiting_for: JvmObject?,
+    wait_until: number?,
+}
 export type ThreadState = "new" | "runnable" | "blocked" | "waiting" | "timed_waiting" | "terminated"
 
 export type StackFrame =
     {
-        read method: MethodInfo,
-        read class: JvmClass,
-        read loader: JvmObjectRef,
-        read code: MethodCodeJava,
-        read stack: { JvmValue },
-        read locals: { JvmValue },
-        read pc: number,
+        method: MethodInfo,
+        class: JvmClass,
+        loader: JvmObjectRef,
+        code: MethodCodeJava,
+        stack: { JvmValue },
+        locals: { JvmValue },
+        pc: number,
+        invocation: Invocation?,
     }
     | {
-        read method: MethodInfo,
-        read class: JvmClass,
-        read loader: JvmObjectRef,
-        read code: MethodCodeLuau,
+        method: MethodInfo,
+        class: JvmClass,
+        loader: JvmObjectRef,
+        code: MethodCodeLuau,
+        args: { JvmValue },
+        invocation: Invocation?,
     }
 
-export type _InvocationResult =
+export type Invocation =
     {
-        --- This invocation completed normally with a value.
-        read kind: "completed",
-        read value: JvmValue,
+        state: "running",
     }
     | {
-        --- This invocation failed.
-        read kind: "abrupt",
-        read thrown: JvmObject,
+        state: "failed",
+        exception: JvmObject,
     }
     | {
-        --- This invocattion yielded (preempted, awaiting lock, etc)
-        read kind: "yielded",
+        state: "complete",
+        value: JvmValue,
     }
 
 export type Monitor = {
-    held_by: JvmThread?,
-    waiting: { JvmThread },
+    --- Who owns this monitor.
+    held_by: Thread?,
+    --- How many times do the own it.
+    held_by_depth: number,
+    --- Threads waiting to be notified.
+    waiting: { Thread },
 }
 
 --[=[
@@ -318,7 +318,7 @@ export type JvmObject = setmetatable<
         --invoke_method: (self: JvmObject, method: MethodRef, ...JvmValue) -> JvmValue,
 
         inner_string: (self: JvmObject) -> string,
-        inner_thread: (self: JvmObject) -> JvmThread,
+        inner_thread: (self: JvmObject) -> Thread,
         get_array_length: (self: JvmObject) -> number,
         get_array_element: (self: JvmObject, index: number) -> JvmValue,
         set_array_element: (self: JvmObject, index: number, value: JvmValue) -> (),
@@ -343,7 +343,7 @@ export type _MagicValue =
     }
     | {
         kind: "thread", -- java/lang/Thread
-        value: JvmThread,
+        value: Thread,
     }
     | {
         kind: "throwable", -- java/lang/Throwable
@@ -416,7 +416,17 @@ export type MethodCodeLuau = {
 
 export type MethodCodeJava = {
     read kind: "java",
+    read max_stack: number,
+    read max_locals: number,
     read code: buffer,
+    read exceptions: { Exception },
+}
+
+export type Exception = {
+    start_pc: number,
+    end_pc: number,
+    handler_pc: number,
+    catch_type: JvmObject?,
 }
 
 export type MethodCodeAbstract = {
@@ -547,6 +557,21 @@ export type CfMethodInfo = {
 export type CfAttributeInfo = {
     read name_index: number,
     read data: buffer,
+}
+
+export type CfCodeAttribute = {
+    max_stack: number,
+    max_locals: number,
+    code: buffer,
+    exceptions: {
+        {
+            start_pc: number,
+            end_pc: number,
+            handler_pc: number,
+            catch_type: number,
+        }
+    },
+    attributes: { CfAttributeInfo },
 }
 
 return t

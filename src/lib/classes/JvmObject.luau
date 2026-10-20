@@ -126,7 +126,7 @@ function JvmObject.inner_string(self: t.JvmObject): string
     return self._magic.value
 end
 
-function JvmObject.inner_thread(self: t.JvmObject): t.JvmThread
+function JvmObject.inner_thread(self: t.JvmObject): t.Thread
     if not self._magic or self._magic.kind ~= "thread" then
         error("not a thread")
     end
