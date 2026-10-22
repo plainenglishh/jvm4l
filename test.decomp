@@ -26,13 +26,7 @@ public class jvm4l.Test {
 
   public static void main();
     Code:
-       0: invokestatic  #5                  // Method calls_error_wrapper:()V
-       3: goto          11
-       6: astore_0
-       7: iconst_1
-       8: invokestatic  #7                  // Method print_int:(I)V
-      11: return
-    Exception table:
-       from    to  target type
-           0     3     6   Class jvm4l/LuauError
+       0: iconst_1
+       1: invokestatic  #5                  // Method print_int:(I)V
+       4: goto          0
 }

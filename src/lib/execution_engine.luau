@@ -32,7 +32,7 @@ end
 
     Reschedule conditions are:
     1. the current thread has reached its budget;
-    2. the current thread is blocked. 
+    2. the current thread is blocked or terminated. 
 ]=]
 local function try_reschedule(jvm: t.Jvm)
     --- do nothing for now
@@ -109,7 +109,7 @@ local function step(jvm: t.Jvm)
     local k = classfile.constant_pool
 
     local start_pc = f.pc
-    f.start_pc = f.pc
+    f.start_pc = start_pc
     local op = buffer.readu8(code, start_pc)
     f.pc += 1
 
@@ -137,6 +137,10 @@ local function step(jvm: t.Jvm)
         f.pc += 2
 
         local offset = bit32.arshift(bit32.lshift(raw_offset, 16), 16)
+        if offset >= 0x80000000 then
+            offset = offset - 4294967296
+        end
+
         f.pc = start_pc + offset
     else
         jvm:throw_exception("java/lang/InternalError", `invalid opcode {op}`)

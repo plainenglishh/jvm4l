@@ -22,9 +22,7 @@ public class Test {
     }
 
     public static void main() {
-        try {
-            calls_error_wrapper();
-        } catch (LuauError test) {
+        while (true) {
             print_int(1);
         }
     }
