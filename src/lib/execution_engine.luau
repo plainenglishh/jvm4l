@@ -1,13 +1,10 @@
+--!native
+
 local class_parser = require("./class_parser")
 local JvmObject = require("./classes/JvmObject")
 local t = require("./t")
 
 --[[
-    improvements wrt frame transitions:
-    native -> java = spin up a new nested exec engine (for sync value out)
-    java -> native = just push a frame
-    java -> java = just push a frame
-
     ensure stack, kpool & locals account for 2-slot items (long & double)
 ]]
 
@@ -15,6 +12,7 @@ local execution_engine = {}
 
 --- Marks an invocation as failed.
 local function fail_invocation(invocation: t.Invocation, exception: t.JvmObject)
+    assert(invocation.state == "running")
     local invocation = invocation :: any
     invocation.state = "failed"
     invocation.exception = exception
@@ -22,6 +20,7 @@ end
 
 --- Marks an invocation as complete.
 local function complete_invocation(invocation: t.Invocation, value: t.JvmValue)
+    assert(invocation.state == "running")
     local invocation = invocation :: any
     invocation.state = "complete"
     invocation.value = value
@@ -41,18 +40,19 @@ local function try_reschedule(jvm: t.Jvm)
 end
 
 local function return_from_frame(thread: t.Thread, count: number, value: t.JvmValue)
-    local frame = thread.stack[#thread.stack]
-    local parent_frame = thread.stack[#thread.stack - 1]
+    local stack = thread.stack
+    local frame = stack[#stack]
+    local parent_frame = stack[#stack - 1]
 
     if frame.invocation then
         complete_invocation(frame.invocation, value)
     end
 
-    thread.stack[#thread.stack] = nil
+    stack[#stack] = nil
 
-    --if parent_frame and parent_frame.code.kind == "java" then
-    --    table.insert(parent_frame.stack, value)
-    --end
+    if parent_frame and parent_frame.code.kind == "java" and count == 1 then
+        table.insert(parent_frame.stack, value)
+    end
 end
 
 local function read_u16be(b: buffer, offset: number): number
@@ -109,6 +109,7 @@ local function step(jvm: t.Jvm)
     local k = classfile.constant_pool
 
     local start_pc = f.pc
+    f.start_pc = f.pc
     local op = buffer.readu8(code, start_pc)
     f.pc += 1
 
@@ -126,22 +127,11 @@ local function step(jvm: t.Jvm)
         local method_info = class:resolve_method(method_ref) or error("unable to resolve method")
         local args = { table.remove(stack) } -- one arg for now
 
-        local ok, value = execution_engine.invoke(jvm, class, method_info, unpack(args))
-        if not ok then
-            f.pc = start_pc
-            error(value, 0)
-        end
-
-        if value ~= nil then
-            table.insert(stack, value)
-        end
-        return
+        execution_engine.invoke_inline(jvm, class, method_info, unpack(args))
     elseif op == 0xAC then -- ireturn
         return_from_frame(thread, 1, table.remove(stack))
-        return
     elseif op == 0xB1 then -- return
         return_from_frame(thread, 0, nil)
-        return
     elseif op == 0xA7 then -- goto
         local raw_offset = read_u16be(code, f.pc)
         f.pc += 2
@@ -181,8 +171,9 @@ local function execute(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
         local thread = jvm.current_thread
         thread.budget -= 1
 
-        local ok, exception = pcall(step, jvm)
+        local stack = thread.stack
 
+        local ok, exception = pcall(step, jvm)
         if not ok then
             local exception: t.JvmObject = if is_exception(exception)
                 then exception :: t.JvmObject
@@ -190,11 +181,12 @@ local function execute(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
 
             local caught = false
 
-            for i = #thread.stack, 1, -1 do
-                local frame = thread.stack[i]
+            local stack_depth = #stack
+            for i = stack_depth, 1, -1 do
+                local frame = stack[i]
                 if frame.code.kind == "java" then
                     for i, exception_info in frame.code.exceptions do
-                        if frame.pc < exception_info.start_pc or frame.pc >= exception_info.end_pc then
+                        if frame.start_pc < exception_info.start_pc or frame.start_pc >= exception_info.end_pc then
                             continue
                         end
 
@@ -210,7 +202,13 @@ local function execute(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
                         break
                     end
                 else
-                    thread.stack[i] = nil
+                    if i == stack_depth then
+                        -- dont repropagate back to the failed native frame! just tear it down and move on
+                        stack[i] = nil
+                        continue
+                    end
+
+                    stack[i] = nil
                     jvm._exec_depth -= 1
                     return false, exception
                 end
@@ -232,28 +230,18 @@ local function execute(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
             end
         end
     end
+
+    error("unreachable")
 end
 
---[=[
-    Invokes a method.
-]=]
-function execution_engine.invoke(
-    jvm: t.Jvm,
+local function push_frame(
+    stack: { t.StackFrame },
     class: t.JvmClass,
     method: t.MethodInfo,
+    invocation: t.Invocation?,
     ...: t.JvmValue
-): (boolean, t.JvmValue)
-    if method.code.kind == "abstract" then
-        jvm:throw_exception("java/lang/AbstractMethodError", method.descriptor)
-        error("^")
-    end
-
+)
     local args = { ... }
-
-    local invocation: t.Invocation = {
-        state = "running",
-    }
-
     local frame: t.StackFrame
     if method.code.kind == "java" then
         frame = {
@@ -264,6 +252,7 @@ function execution_engine.invoke(
             stack = {},
             locals = args,
             pc = 0,
+            start_pc = 0,
             invocation = invocation,
         } :: t.StackFrame
     elseif method.code.kind == "luau" then
@@ -277,7 +266,53 @@ function execution_engine.invoke(
         } :: t.StackFrame
     end
 
-    table.insert(jvm.current_thread.stack, frame)
+    table.insert(stack, frame)
+end
+
+function execution_engine.invoke_inline(jvm: t.Jvm, class: t.JvmClass, method: t.MethodInfo, ...: t.JvmValue)
+    if method.code.kind == "abstract" then
+        jvm:throw_exception("java/lang/AbstractMethodError", method.descriptor)
+        error("^")
+    end
+
+    local thread = jvm.current_thread
+    local stack = thread.stack
+    local this_frame = stack[#stack]
+    if not this_frame or this_frame.code.kind == "native" then
+        jvm:throw_exception(
+            "java/lang/InternalError",
+            "attempt to use invoke_inline in native context, use invoke_sync"
+        )
+        error("^")
+    end
+
+    push_frame(stack, class, method, nil, ...)
+end
+
+--[=[
+    Invokes a method.
+]=]
+function execution_engine.invoke_sync(
+    jvm: t.Jvm,
+    class: t.JvmClass,
+    method: t.MethodInfo,
+    ...: t.JvmValue
+): (boolean, t.JvmValue)
+    if method.code.kind == "abstract" then
+        jvm:throw_exception("java/lang/AbstractMethodError", method.descriptor)
+        error("^")
+    end
+
+    local thread = jvm.current_thread
+    local stack = thread.stack
+    local this_frame = stack[#stack]
+    if this_frame and this_frame.code.kind == "java" then
+        jvm:throw_exception("java/lang/InternalError", "attempt to use invoke_sync in Java context, use invoke_inline")
+        error("^")
+    end
+
+    local invocation: t.Invocation = { state = "running" }
+    push_frame(stack, class, method, invocation, ...)
     return execute(jvm, invocation)
 end
 

@@ -9,21 +9,23 @@ public class Test {
         throw new AssertionError();
     }
 
+    public static native void calls_error_wrapper();
     public static native void print_int(int value);
     public static native void error();
 
-    public static int get_1() {
+    static void error_wrapper() {
+        error();
+    }
+
+    static int get_1() {
         return 1;
     }
 
     public static void main() {
         try {
+            calls_error_wrapper();
+        } catch (LuauError test) {
             print_int(1);
-            error();
-        } catch(jvm4l.LuauError e) {
-            print_int(2);
         }
-
-        print_int(3);
     }
 }

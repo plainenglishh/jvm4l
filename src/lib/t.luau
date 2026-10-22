@@ -179,6 +179,7 @@ export type StackFrame =
         stack: { JvmValue },
         locals: { JvmValue },
         pc: number,
+        start_pc: number,
         invocation: Invocation?,
     }
     | {

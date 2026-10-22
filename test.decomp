@@ -8,25 +8,31 @@ public class jvm4l.Test {
        8: invokespecial #3                  // Method java/lang/AssertionError."<init>":()V
       11: athrow
 
+  public static native void calls_error_wrapper();
+
   public static native void print_int(int);
 
   public static native void error();
 
-  public static int get_1();
+  static void error_wrapper();
+    Code:
+       0: invokestatic  #4                  // Method error:()V
+       3: return
+
+  static int get_1();
     Code:
        0: iconst_1
        1: ireturn
 
   public static void main();
     Code:
-       0: iconst_1
-       1: invokestatic  #4                  // Method print_int:(I)V
-       4: goto          8
-       7: astore_0
-       8: iconst_2
-       9: invokestatic  #4                  // Method print_int:(I)V
-      12: return
+       0: invokestatic  #5                  // Method calls_error_wrapper:()V
+       3: goto          11
+       6: astore_0
+       7: iconst_1
+       8: invokestatic  #7                  // Method print_int:(I)V
+      11: return
     Exception table:
        from    to  target type
-           0     4     7   Class jvm4l/LuauError
+           0     3     6   Class jvm4l/LuauError
 }
