@@ -326,7 +326,7 @@ export type JvmObject = setmetatable<
 
 			@private
 		]=]
-        _allocate: (jvm: Jvm, class: JvmClass, magic: _MagicValue?) -> JvmObject,
+        _new: (jvm: Jvm, class: JvmClass, magic: _MagicValue?) -> JvmObject,
 
         --[=[
 

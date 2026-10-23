@@ -164,7 +164,7 @@ local function step(jvm: t.Jvm)
     elseif op >= 0x4B and op <= 0x4E then -- astore_i
         local idx = op - 0x4B
         local ref = pop(f, "1")
-        locals[idx] = ref
+        locals[idx + 1] = ref
     elseif op == 0xB8 then
         local idx = read_u16be(code, f.pc)
         f.pc += 2

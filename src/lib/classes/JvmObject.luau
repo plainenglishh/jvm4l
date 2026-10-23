@@ -64,7 +64,7 @@ function JvmObject.__display(self: t.JvmObject): string
     return tostring(self)
 end
 
-function JvmObject._allocate(jvm: t.Jvm, class: t.JvmClass, magic: t._MagicValue?): t.JvmObject
+function JvmObject._new(jvm: t.Jvm, class: t.JvmClass, magic: t._MagicValue?): t.JvmObject
     if class.name == "java/lang/String" then
         assert(
             magic and magic.kind == "string",

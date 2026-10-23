@@ -323,7 +323,10 @@ function Jvm.resolve_class(self: t.Jvm, name: string, initiating_loader: t.JvmCl
 end
 
 function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.JvmClassLoader): t.JvmClass
-    local classfile = class_parser.parse(classfile)
+    local parse_ok, classfile = pcall(class_parser.parse, classfile)
+    if not parse_ok then
+        self:throw_exception("java/lang/ClassFormatError", tostring(classfile))
+    end
 
     local this_class_info = class_parser.class(classfile, classfile.this_class)
     local this_class_name = class_parser.class_name(classfile, this_class_info)
