@@ -1,5 +1,7 @@
 package jvm4l;
 
+import jvm4l.luau.Globals;
+
 /**
  * Used for testing execution before application class loader is in a usable 
  * state.
@@ -11,10 +13,9 @@ public class Test {
 
     public static native void calls_error_wrapper();
     public static native void print_int(int value);
-    public static native void error();
 
     static void error_wrapper() {
-        error();
+        Globals.error();
     }
 
     static int get_1() {

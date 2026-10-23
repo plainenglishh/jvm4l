@@ -23,6 +23,27 @@ export type Lazy<T> = setmetatable<{
     get: (self: Lazy<T>) -> T,
 }>
 
+export type ConstantValue = JvmValue | JvmClass | MethodRef | FieldRef
+
+export type ConstantPool = setmetatable<
+    {
+        read _jvm: Jvm,
+        read _class: JvmClass,
+        read _classfile: Classfile,
+        read _resolved: { [number]: ConstantValue },
+    },
+    {
+        read __index: getmetatable<ConstantPool>,
+        read new: (class: JvmClass) -> ConstantPool,
+        read get: & ((self: ConstantPool, idx: number, kind: "int" | "float" | "double") -> number)
+            & ((self: ConstantPool, idx: number, kind: "long") -> integer)
+            & ((self: ConstantPool, idx: number, kind: "string") -> JvmObject)
+            & ((self: ConstantPool, idx: number, kind: "methodref") -> MethodRef)
+            & ((self: ConstantPool, idx: number, kind: "fieldref") -> FieldRef)
+            & ((self: ConstantPool, idx: number, kind: "class") -> JvmClass),
+    }
+>
+
 --------------------------------------------------------------------------------
 
 --// Computational Types

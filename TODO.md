@@ -5,6 +5,8 @@
 ## Short Term Goals
 
 - [ ] important!: clarify class lifecycle. when classes are loaded, initialised, etc, and when to resolve symbolic references (jvmtype is currently a live reference, should it be symbolic?)
+- [ ] lazily loaded constant pool (backed by the classfile)
+- [ ] TESTING!!
 - [ ] consider 'unflattening' method/field tables
 - [ ] transition to invocation to MethodHandle/FieldHandle, and introduce method dispatch seperately in exec engine
 - [ ] move jvm:invoke into JvmClass:invoke_static() and JvmObject:invoke()

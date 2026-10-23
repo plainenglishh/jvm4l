@@ -22,7 +22,6 @@ public class Launcher {
     }
 
     public static class AppClassLoader extends ClassLoader {
-        
         public AppClassLoader(ClassLoader parent) {
             super(parent);
         }

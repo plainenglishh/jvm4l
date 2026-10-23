@@ -108,7 +108,7 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
     if self.super then
         self.super:_ensure_initialised()
         if self.super._state == "error" then
-            self._state = "error"
+            (self :: any)._state = "error" -- this is read only sometimes? (hence the horrid typecast)
             error("this class errored. cannot be used ok!") -- make this nicer
         end
     end

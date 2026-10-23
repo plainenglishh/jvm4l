@@ -498,7 +498,7 @@ end
 function Jvm.internal_error(self: t.Jvm, message: string, level: number?): never
     local traceback = debug.traceback(nil, (level or 1) + 1)
     local cause =
-        self:create_exception("jvm4l/LuauError", message .. "\n    " .. traceback:gsub("\n", "\n    "), nil, true)
+        self:create_exception("jvm4l/luau/LuauError", message .. "\n    " .. traceback:gsub("\n", "\n    "), nil, true)
     return self:throw_exception("java/lang/InternalError", message, cause)
 end
 

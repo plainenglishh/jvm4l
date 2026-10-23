@@ -48,7 +48,7 @@ native_methods["java/lang/Throwable"] = {
     end,
 }
 
-native_methods["jvm4l/Luau"] = {
+native_methods["jvm4l/luau/Globals"] = {
     ["print:([Ljava/lang/Object;)V"] = function(_jvm: t.Jvm, objects: t.JvmObject)
         print(unpack(objects:get_array_elements()))
     end,

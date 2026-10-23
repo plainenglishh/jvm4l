@@ -11,7 +11,7 @@ end
 local function coerce_exception(jvm: t.Jvm, exception: unknown): t.JvmObject
     return if is_exception(exception)
         then exception :: t.JvmObject
-        else jvm:create_exception("jvm4l/LuauError", tostring(exception))
+        else jvm:create_exception("jvm4l/luau/LuauError", tostring(exception))
 end
 
 local function match_exception_handler(f: t.StackFrame, exception: t.JvmObject): t.ExceptionHandler?

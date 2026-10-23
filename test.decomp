@@ -12,11 +12,9 @@ public class jvm4l.Test {
 
   public static native void print_int(int);
 
-  public static native void error();
-
   static void error_wrapper();
     Code:
-       0: invokestatic  #4                  // Method error:()V
+       0: invokestatic  #4                  // Method jvm4l/luau/Globals.error:()V
        3: return
 
   static int get_1();
