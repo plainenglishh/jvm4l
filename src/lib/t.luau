@@ -424,10 +424,10 @@ export type MethodCodeJava = {
     read max_stack: number,
     read max_locals: number,
     read code: buffer,
-    read exceptions: { Exception },
+    read exceptions: { ExceptionHandler },
 }
 
-export type Exception = {
+export type ExceptionHandler = {
     start_pc: number,
     end_pc: number,
     handler_pc: number,

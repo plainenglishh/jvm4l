@@ -22,8 +22,6 @@ public class Test {
     }
 
     public static void main() {
-        while (true) {
-            print_int(1);
-        }
+        calls_error_wrapper();
     }
 }

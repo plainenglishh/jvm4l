@@ -26,7 +26,6 @@ public class jvm4l.Test {
 
   public static void main();
     Code:
-       0: iconst_1
-       1: invokestatic  #5                  // Method print_int:(I)V
-       4: goto          0
+       0: invokestatic  #5                  // Method calls_error_wrapper:()V
+       3: return
 }
