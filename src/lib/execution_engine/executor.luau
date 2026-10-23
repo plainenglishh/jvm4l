@@ -57,6 +57,7 @@ local function unwind_thread(jvm: t.Jvm, thread: t.Thread, target: t.Invocation,
         end
 
         stack[i] = nil
+        jvm:_trace(`unwound frame #{i} on thread #{thread.id} ({f.class.fqcn}.{f.method.signature})`)
 
         if f.invocation and f.invocation == target then
             return false
@@ -72,6 +73,7 @@ end
 @native
 local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
     jvm._exec_depth += 1
+    jvm:_trace(`entered execution engine #{jvm._exec_depth}`)
 
     local target_ok: boolean, target_value: t.JvmValue
     while true do
@@ -103,6 +105,13 @@ local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
         end
     end
 
+    jvm:_trace(
+        `exited execution engine #{jvm._exec_depth} {if target_ok then "" else "un"}successfully with {if target_ok
+            then "value"
+            else "exception (hashcode)"} {if not target_ok
+            then (target_value :: any).hash_code
+            else target_value}`
+    )
     jvm._exec_depth -= 1
     return target_ok, target_value
 end

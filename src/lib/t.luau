@@ -70,6 +70,7 @@ export type Jvm = setmetatable<
         read _classes: { [JvmClassLoader]: { [string]: JvmClass } },
         read _threads: { Thread },
         current_thread: Thread,
+        _next_thread_id: number,
         _exec_depth: number,
 
         _gc: GarbageCollector,
@@ -84,6 +85,8 @@ export type Jvm = setmetatable<
         __display: (self: Jvm) -> string,
 
         new: (settings: IntoJvmSettings) -> Jvm,
+
+        _trace: (self: Jvm, message: string) -> (),
 
         _create_thread: (self: Jvm, daemon: boolean) -> Thread,
         _interrupt: (self: Jvm) -> (),
@@ -132,16 +135,19 @@ export type IntoJvmSettings = {
     quantum: number?,
     interrupt: InterruptCallback?,
     link_native: LinkNativeCallback,
+    trace: TraceCallback?,
 }
 
 export type JvmSettings = {
     quantum: number,
     interrupt: InterruptCallback?,
     link_native: LinkNativeCallback,
+    trace: TraceCallback?,
 }
 
 export type LinkNativeCallback = (class_name: string, signature: string) -> NativeMethod?
 export type InterruptCallback = (jvm: Jvm) -> ()
+export type TraceCallback = (message: string) -> ()
 
 --- A reference to a class loader. Either "bootstrap", or a reference to a user-defined loader.
 export type JvmClassLoader = "bootstrap" | JvmObject
@@ -172,6 +178,7 @@ export type GcFinalise = (object: JvmObject) -> boolean
     methods to its internal thread.
 ]=]
 export type Thread = {
+    id: number,
     stack: { StackFrame },
     state: ThreadState,
     daemon: boolean,

@@ -95,6 +95,8 @@ end
 function JvmClass._initialise(self: t.JvmClass)
     assert(self._state ~= "error")
 
+    self.jvm:_trace(`initialising class {self.name}`)
+
     if self._state ~= "uninitialised" then
         return
     end

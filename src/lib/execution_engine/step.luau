@@ -19,7 +19,7 @@ local function invoke_inline(jvm: t.Jvm, class: t.JvmClass, method: t.MethodInfo
         error("^")
     end
 
-    frame.push_on(stack, class, method, nil, args)
+    frame.push_on(thread, class, method, nil, args)
 end
 
 local function read_u16be(b: buffer, offset: number): number
@@ -70,7 +70,7 @@ local function push(frame: t.StackFrame, value: t.JvmValue, slots: "1" | "2")
     frame.stack_top = top
 end
 
-local function pop(frame: t.StackFrame, slots: "1" | "2" | "any"): t.JvmValue
+local function pop(frame: t.StackFrame, slots: "1" | "2" | "any"): (t.JvmValue, "1" | "2")
     assert(frame.code.kind == "java")
     local stack = frame.stack
     local top = frame.stack_top
@@ -87,23 +87,23 @@ local function pop(frame: t.StackFrame, slots: "1" | "2" | "any"): t.JvmValue
         stack[top] = nil
         top -= 1
         frame.stack_top = top
-        return real_val
+        return real_val, "2"
     elseif slots == "1" then
         if val == LONG_SLOT_MARKER then
             error("expected 1-slot")
         end
         frame.stack_top = top
-        return val
+        return val, "1"
     else
         if val == LONG_SLOT_MARKER then
             local real_val = stack[top]
             stack[top] = nil
             top -= 1
             frame.stack_top = top
-            return real_val
+            return real_val, "2"
         end
         frame.stack_top = top
-        return val
+        return val, "1"
     end
 end
 
@@ -123,7 +123,9 @@ local function step(jvm: t.Jvm)
     local method = f.method
 
     if f.code.kind == "luau" then
+        -- typecheck here
         local value = f.code.closure(jvm, unpack(f.args))
+        -- typecheck here
         return frame.return_from_current_frame(thread, #method.type:get().arguments, value)
     end
 
@@ -135,15 +137,31 @@ local function step(jvm: t.Jvm)
 
     local start_pc = f.pc
     f.start_pc = start_pc
+
+    if f.pc == 0 then
+        -- typecheck here
+    end
+
     local op = buffer.readu8(code, start_pc)
     f.pc += 1
 
     if op == 0x00 then -- nop
     elseif op == 0x01 then -- aconst_null
         push(f, nil, "1") -- nil is a null ref
-    elseif op >= 0x02 and op <= 0x8 then -- aconst_i
+    elseif op >= 0x02 and op <= 0x08 then -- aconst_i
         push(f, op - 0x03, "1")
-    elseif op >= 0x4B and op <= 0x4E then
+    elseif op >= 0x09 and op <= 0x0A then -- lconst_i
+        push(f, integer.create(op - 0x09), "2")
+    elseif op >= 0x0B and op <= 0x0D then -- fconst_i
+        push(f, op - 0x0B, "1")
+    elseif op >= 0x0E and op <= 0x0F then -- dconst_i
+        push(f, op - 0x0E, "2")
+    elseif op == 0x10 then -- bipush
+        local raw_byte = buffer.readu8(code, f.pc)
+        f.pc += 1
+        local value = if raw_byte >= 0x80 then raw_byte - 0x100 else raw_byte
+        push(f, value, "1")
+    elseif op >= 0x4B and op <= 0x4E then -- astore_i
         local idx = op - 0x4B
         local ref = pop(f, "1")
         locals[idx] = ref
@@ -156,7 +174,8 @@ local function step(jvm: t.Jvm)
         local arg_count = #method_info.type:get().arguments
         local args: { any } = table.create(arg_count)
         for i = 1, arg_count do
-            table.insert(args, 1, pop(f, "any"))
+            local v = pop(f, "any")
+            table.insert(args, 1, v)
         end
         invoke_inline(jvm, class, method_info, args)
     elseif op == 0xAC then -- ireturn

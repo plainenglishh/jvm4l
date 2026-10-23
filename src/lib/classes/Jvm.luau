@@ -189,6 +189,7 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
         quantum = into_settings.quantum or 500,
         interrupt = into_settings.interrupt,
         link_native = into_settings.link_native,
+        trace = into_settings.trace,
     }
 
     local self: t.Jvm = setmetatable({
@@ -197,6 +198,7 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
             bootstrap = {},
         },
         _threads = {},
+        _next_thread_id = 0,
         current_thread = (nil :: any) :: t.Thread,
         _exec_depth = 0,
         _gc = (nil :: any) :: t.GarbageCollector,
@@ -212,6 +214,12 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
     return self
 end
 
+function Jvm._trace(self: t.Jvm, message: string)
+    if self._settings.trace then
+        self._settings.trace(message)
+    end
+end
+
 function Jvm._interrupt(self: t.Jvm)
     if self._settings.interrupt then
         self._settings.interrupt(self)
@@ -220,15 +228,18 @@ end
 
 function Jvm._create_thread(self: t.Jvm, daemon: boolean): t.Thread
     local thread: t.Thread = {
+        id = self._next_thread_id,
         stack = {},
         state = "new",
         daemon = daemon,
         mirror = (nil :: any) :: t.JvmObject,
         budget = 0,
     }
+    self._next_thread_id += 1
     local mirror = self._classes.bootstrap["java/lang/Thread"]:new_uninitialised({ kind = "thread", value = thread })
     thread.mirror = mirror
     table.insert(self._threads, thread)
+    self:_trace(`created thread #{thread.id}`)
     return thread
 end
 
@@ -270,6 +281,7 @@ local function get_array_class(self: t.Jvm, name: string, initiating_loader: t.J
     local Object = self._classes.bootstrap["java/lang/Object"]
     local class = JvmClass._allocate(self, defining_loader, name, Object, {}, ARRAY_METHODS, {})
     register_class(self, defining_loader, class)
+    self:_trace(`created array class {name}`)
     return class
 end
 
@@ -334,6 +346,9 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
     local class =
         JvmClass._allocate(self, defining_loader, this_class_name, super_class, implements, methods, fields, classfile)
     register_class(self, defining_loader, class)
+
+    self:_trace(`loaded class {this_class_name} from loader {defining_loader}`)
+
     return class
 end
 

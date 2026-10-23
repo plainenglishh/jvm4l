@@ -1,3 +1,4 @@
+print("-----")
 local jvm4l = require("./src/lib")
 
 local function link_native(class_name: string, method_name: string): jvm4l.NativeMethod?
@@ -23,8 +24,13 @@ local function link_native(class_name: string, method_name: string): jvm4l.Nativ
     return nil
 end
 
+local epoch = os.clock()
 local vm = jvm4l.Jvm.new({
     link_native = link_native,
+    trace = function(message: string)
+        local time = os.clock() - epoch
+        print(`\x1b[2m[jvm4l @ {math.round(time * 100000) / 100000}] {message}\x1b[0m`)
+    end,
 })
 
 --local Object = vm:resolve_class("java/lang/Object")
@@ -38,8 +44,6 @@ local vm = jvm4l.Jvm.new({
 --print(array:get_array_elements())
 --print(vm:resolve_class("jvm4l/Luau"))
 
-print("------")
-
 local ok, err = pcall(function(...)
     local Test = vm:resolve_class("jvm4l/Test")
     local test_ref = vm:get_method_ref(Test, "main", "()V")
@@ -47,5 +51,5 @@ local ok, err = pcall(function(...)
     vm:invoke(Test, test_method, {})
 end)
 if not ok then
-    print(tostring(err))
+    print(`\x1b[31m{err}\x1b[m`)
 end

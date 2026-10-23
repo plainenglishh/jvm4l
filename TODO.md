@@ -8,8 +8,8 @@
 - [X] Exceptions (simply the objects themselves, rather than catching)
 - [X] Field value get/set
 - [ ] Field/Method resolution
-- [ ] Threads
-- [ ] Method calling & execution engine
+- [X] Threads
+- [X] Method calling & execution engine
 - [ ] Typechecking and access checking the above
 - [X] Strings
 - [X] Arrays

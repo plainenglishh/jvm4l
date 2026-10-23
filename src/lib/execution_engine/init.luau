@@ -32,7 +32,7 @@ function execution_engine.invoke_on_sync(
     end
 
     local invocation: t.Invocation = { state = "running" }
-    frames.push_on(stack, class, method, invocation, args)
+    frames.push_on(thread, class, method, invocation, args)
     return executor(jvm, invocation)
 end
 

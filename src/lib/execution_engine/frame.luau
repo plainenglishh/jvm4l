@@ -4,7 +4,7 @@ local t = require("../t")
 local frame = {}
 
 function frame.push_on(
-    stack: { t.StackFrame },
+    thread: t.Thread,
     class: t.JvmClass,
     method: t.MethodInfo,
     invocation: t.Invocation?,
@@ -60,7 +60,9 @@ function frame.push_on(
         } :: t.StackFrame
     end
 
-    table.insert(stack, frame)
+    class.jvm:_trace(`pushed frame #{#thread.stack + 1} on thread #{thread.id} ({class.fqcn}.{method.signature})`)
+
+    table.insert(thread.stack, frame)
 end
 
 function frame.current(jvm: t.Jvm): (t.Thread, t.StackFrame?)
