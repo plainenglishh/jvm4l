@@ -6,6 +6,8 @@
 
 - [ ] important!: clarify class lifecycle. when classes are loaded, initialised, etc, and when to resolve symbolic references (jvmtype is currently a live reference, should it be symbolic?)
 - [ ] consider 'unflattening' method/field tables
+- [ ] transition to invocation to MethodHandle/FieldHandle, and introduce method dispatch seperately in exec engine
+- [ ] move jvm:invoke into JvmClass:invoke_static() and JvmObject:invoke()
 - [X] Descriptor to `JvmType`
 - [X] Exceptions (simply the objects themselves, rather than catching)
 - [X] Field value get/set

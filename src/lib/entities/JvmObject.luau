@@ -92,7 +92,7 @@ function JvmObject._new(jvm: t.Jvm, class: t.JvmClass, magic: t._MagicValue?): t
     return self
 end
 
-function JvmObject._initialise(_self: t.JvmObject, ...: t.JvmValue)
+function JvmObject._initialise(self: t.JvmObject, constructor: t.MethodHandle, args: { t.JvmValue })
     util.unimplemented()
 end
 

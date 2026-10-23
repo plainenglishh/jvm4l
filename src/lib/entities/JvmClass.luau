@@ -93,23 +93,33 @@ function JvmClass._prepare(
 end
 
 function JvmClass._ensure_initialised(self: t.JvmClass)
-    assert(self._state ~= "error")
-    if self._state ~= "uninitialised" then
+    if self._state == "initialised" then
         return
+    elseif self._state == "initialising" then
+        -- FIXME: block other threads waiting for this to be initialised ! also, allow reentrant initialiser
+        error("other thread is initialising")
+    elseif self._state == "error" then
+        error("this class errored. cannot be used ok!") -- make this nicer
     end
 
-    -- FIXME: block other threads waiting for this to be initialised !
     self._state = "initialising"
     self.jvm:_trace(`initialising class {self.name}`)
 
     if self.super then
         self.super:_ensure_initialised()
+        if self.super._state == "error" then
+            self._state = "error"
+            error("this class errored. cannot be used ok!") -- make this nicer
+        end
     end
+
+    -- TODO: interfaces here
+    -- TODO: do ConstantValue here
 
     local clinit_ref = self.jvm:get_method_ref(self, "<clinit>", "()V")
     local clinit_info = self:resolve_method(clinit_ref)
     if clinit_info then
-        self.jvm:invoke(self, clinit_info, {})
+        self.jvm:invoke(self, clinit_info, {}) -- CATCH THIS
     end
 
     self._state = "initialised"

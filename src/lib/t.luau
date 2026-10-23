@@ -342,7 +342,7 @@ export type JvmObject = setmetatable<
         --[=[
 
 		]=]
-        _initialise: (self: JvmObject, ...JvmValue) -> (),
+        _initialise: (self: JvmObject, constructor: MethodHandle, args: { JvmValue }) -> (),
 
         instance_of: (self: JvmObject, class: JvmClass) -> boolean,
         implements: (self: JvmObject, interface: JvmClass) -> boolean,
@@ -405,8 +405,8 @@ export type FieldInfo = {
 
 --- Unresolved field reference.
 export type FieldRef = {
-    read class: JvmClass,
-    read name: string,
+    read class: JvmClass, -- todo: switch to class name
+    read name: string, -- todo: switch to signature
 }
 
 --- Resolved field handle.
@@ -439,8 +439,8 @@ export type MethodInfo = {
 
 --- Unresolved method reference.
 export type MethodRef = {
-    read class: JvmClass,
-    read name: string,
+    read class: JvmClass, -- todo: switch to class name
+    read name: string, -- todo: switch to signature
 }
 
 --- Resolved method handle.
