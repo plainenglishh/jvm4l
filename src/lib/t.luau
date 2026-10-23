@@ -12,6 +12,18 @@ local t = {}
 
 --------------------------------------------------------------------------------
 
+export type Lazy<T> = setmetatable<{
+    _init: () -> T,
+    _ready: boolean,
+    _value: T?,
+}, {
+    __index: getmetatable<Lazy<T>>,
+    new: (init: () -> T) -> Lazy<T>,
+    get: (self: Lazy<T>) -> T,
+}>
+
+--------------------------------------------------------------------------------
+
 --// Computational Types
 
 --- A runtime 32-bit integer. Also represents booleans, bytes, shorts and chars.
@@ -107,12 +119,12 @@ export type Jvm = setmetatable<
 
         coerce: (self: Jvm, ...IntoJvmValue) -> ...JvmValue,
 
-        invoke: (self: Jvm, class: JvmClass, method: MethodInfo, ...JvmValue) -> JvmValue,
+        invoke: (self: Jvm, class: JvmClass, method: MethodInfo, args: { JvmValue }) -> JvmValue,
 
         --[=[
 			Executes `main_path`.
 		]=]
-        run: (self: Jvm, main_path: string, ...JvmValue) -> (), -- loads the class and invokes main on it
+        run: (self: Jvm, main_path: string, args: { JvmValue }) -> (), -- loads the class and invokes main on it
     }
 >
 
@@ -177,6 +189,7 @@ export type StackFrame =
         loader: JvmObjectRef,
         code: MethodCodeJava,
         stack: { JvmValue },
+        stack_top: number,
         locals: { JvmValue },
         pc: number,
         start_pc: number,
@@ -357,6 +370,7 @@ export type FieldInfo = {
     read name: string,
     read descriptor: string,
     read signature: string,
+    read type: Lazy<JvmType>,
 
     read public: boolean,
     read private: boolean,
@@ -379,8 +393,7 @@ export type MethodInfo = {
     read descriptor: string,
     read signature: string,
     read code: MethodCode,
-    read arg_count: number,
-    read ret_count: number,
+    read type: Lazy<JvmMethodType>,
 
     read public: boolean,
     read private: boolean,

@@ -15,7 +15,7 @@ local function link_native(class_name: string, method_name: string): jvm4l.Nativ
             local Test = jvm:resolve_class("jvm4l/Test")
             local error_wrapper_ref = jvm:get_method_ref(Test, "error_wrapper", "()V")
             local error_wrapper = Test:resolve_method(error_wrapper_ref) or error("bad")
-            jvm:invoke(Test, error_wrapper)
+            jvm:invoke(Test, error_wrapper, {})
             return nil
         end
     end
@@ -44,7 +44,7 @@ local ok, err = pcall(function(...)
     local Test = vm:resolve_class("jvm4l/Test")
     local test_ref = vm:get_method_ref(Test, "main", "()V")
     local test_method = Test:resolve_method(test_ref) or error("bad")
-    vm:invoke(Test, test_method)
+    vm:invoke(Test, test_method, {})
 end)
 if not ok then
     print(tostring(err))

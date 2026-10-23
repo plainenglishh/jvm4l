@@ -1,11 +1,12 @@
 local class_parser = require("../class_parser")
-local descriptor_parser = require("../descriptor_parser")
+local jvm_type = require("../jvm_type")
 local execution = require("../execution_engine")
 local jcl_classfiles = require("../jcl_classfiles")
 local native_methods = require("../native_methods")
 local t = require("../t")
 local util = require("../util")
-local GarbageCollector = require("./GarbageCollector")
+local GarbageCollector = require("../GarbageCollector")
+local Lazy = require("../Lazy")
 local JvmClass = require("./JvmClass")
 
 local Jvm = {}
@@ -92,8 +93,9 @@ local function get_members(
             descriptor = descriptor,
             signature = signature,
             code = code,
-            arg_count = descriptor_parser.arg_count(descriptor),
-            ret_count = descriptor_parser.ret_count(descriptor),
+            type = Lazy.new(function()
+                return jvm_type.parse_method_descriptor(jvm, descriptor, defining_loader)
+            end),
 
             public = bit32.band(method.access_flags, 0x0001) ~= 0,
             private = bit32.band(method.access_flags, 0x0002) ~= 0,
@@ -116,10 +118,14 @@ local function get_members(
         local name = class_parser.string_value(classfile, field.name_index)
         local descriptor = class_parser.string_value(classfile, field.descriptor_index)
 
-        table.insert(fields, {
+        table.insert(fields :: { any }, {
             name = name,
             descriptor = descriptor,
             signature = `{name}:{descriptor}`,
+            type = Lazy.new(function()
+                local value = jvm_type.parse_field_descriptor(jvm, descriptor, defining_loader)
+                return value
+            end),
 
             public = bit32.band(field.access_flags, 0x0001) ~= 0,
             private = bit32.band(field.access_flags, 0x0002) ~= 0,
@@ -405,7 +411,7 @@ function Jvm.create_string(self: t.Jvm, value: string): t.JvmObject
 end
 
 function Jvm.create_array(self: t.Jvm, element: t.JvmType, size_or_values: number | { t.JvmValue }): t.JvmObject
-    local elem_descriptor = descriptor_parser.type_to_descriptor(element)
+    local elem_descriptor = jvm_type.type_to_descriptor(element)
     local class_name = `[{elem_descriptor}`
     local class = self:resolve_class(class_name)
 
@@ -491,8 +497,8 @@ function Jvm.coerce(self: t.Jvm, ...: t.IntoJvmValue): ...t.JvmValue
     return unpack(values)
 end
 
-function Jvm.invoke(self: t.Jvm, class: t.JvmClass, method: t.MethodInfo, ...: t.JvmValue): t.JvmValue
-    local ret = { execution.invoke(self, class, method) }
+function Jvm.invoke(self: t.Jvm, class: t.JvmClass, method: t.MethodInfo, args: { t.JvmValue }): t.JvmValue
+    local ret = { execution.invoke_sync(self, class, method, args) }
     local ok = table.remove(ret, 1)
     if not ok then
         error(table.remove(ret, 1), 0)
@@ -501,7 +507,7 @@ function Jvm.invoke(self: t.Jvm, class: t.JvmClass, method: t.MethodInfo, ...: t
     return table.remove(ret, 1) :: t.JvmValue
 end
 
-function Jvm.run(self: t.Jvm, main_path: string, ...: t.JvmValue)
+function Jvm.run(self: t.Jvm, main_path: string, args: { t.JvmValue })
     util.unimplemented()
 end
 

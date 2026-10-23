@@ -2,7 +2,7 @@ local class_parser = require("../class_parser")
 local t = require("../t")
 local frame = require("./frame")
 
-local function invoke_inline(jvm: t.Jvm, class: t.JvmClass, method: t.MethodInfo, ...: t.JvmValue)
+local function invoke_inline(jvm: t.Jvm, class: t.JvmClass, method: t.MethodInfo, args: { t.JvmValue })
     if method.code.kind == "abstract" then
         jvm:throw_exception("java/lang/AbstractMethodError", method.descriptor)
         error("^")
@@ -19,7 +19,7 @@ local function invoke_inline(jvm: t.Jvm, class: t.JvmClass, method: t.MethodInfo
         error("^")
     end
 
-    frame.push_on(stack, class, method, nil, ...)
+    frame.push_on(stack, class, method, nil, args)
 end
 
 local function read_u16be(b: buffer, offset: number): number
@@ -53,6 +53,60 @@ local function get_method_ref_from_k(jvm: t.Jvm, classfile: t.Classfile, idx: nu
     return class, method_ref
 end
 
+local LONG_SLOT_MARKER = newproxy(false)
+
+local function push(frame: t.StackFrame, value: t.JvmValue, slots: "1" | "2")
+    assert(frame.code.kind == "java")
+    local stack = frame.stack
+
+    local top = frame.stack_top + 1
+    stack[top] = value
+
+    if slots == "2" then
+        top += 1
+        stack[top] = LONG_SLOT_MARKER
+    end
+
+    frame.stack_top = top
+end
+
+local function pop(frame: t.StackFrame, slots: "1" | "2" | "any"): t.JvmValue
+    assert(frame.code.kind == "java")
+    local stack = frame.stack
+    local top = frame.stack_top
+
+    local val = stack[top]
+    stack[top] = nil
+    top -= 1
+
+    if slots == "2" then
+        if val ~= LONG_SLOT_MARKER then
+            error("expected 2-slot value")
+        end
+        local real_val = stack[top]
+        stack[top] = nil
+        top -= 1
+        frame.stack_top = top
+        return real_val
+    elseif slots == "1" then
+        if val == LONG_SLOT_MARKER then
+            error("expected 1-slot")
+        end
+        frame.stack_top = top
+        return val
+    else
+        if val == LONG_SLOT_MARKER then
+            local real_val = stack[top]
+            stack[top] = nil
+            top -= 1
+            frame.stack_top = top
+            return real_val
+        end
+        frame.stack_top = top
+        return val
+    end
+end
+
 --[=[ 
     Execute a single VM step (a native call, or a single bytecode instruction)
 
@@ -70,7 +124,7 @@ local function step(jvm: t.Jvm)
 
     if f.code.kind == "luau" then
         local value = f.code.closure(jvm, unpack(f.args))
-        return frame.return_from_current_frame(thread, method.ret_count, value)
+        return frame.return_from_current_frame(thread, #method.type:get().arguments, value)
     end
 
     local code = f.code.code
@@ -84,11 +138,14 @@ local function step(jvm: t.Jvm)
     local op = buffer.readu8(code, start_pc)
     f.pc += 1
 
-    if op >= 0x02 and op <= 0x8 then
-        table.insert(stack, op - 0x03)
+    if op == 0x00 then -- nop
+    elseif op == 0x01 then -- aconst_null
+        push(f, nil, "1") -- nil is a null ref
+    elseif op >= 0x02 and op <= 0x8 then -- aconst_i
+        push(f, op - 0x03, "1")
     elseif op >= 0x4B and op <= 0x4E then
         local idx = op - 0x4B
-        local ref = table.remove(stack)
+        local ref = pop(f, "1")
         locals[idx] = ref
     elseif op == 0xB8 then
         local idx = read_u16be(code, f.pc)
@@ -96,11 +153,14 @@ local function step(jvm: t.Jvm)
 
         local class, method_ref = get_method_ref_from_k(jvm, classfile, idx)
         local method_info = class:resolve_method(method_ref) or error("unable to resolve method")
-        local args = { table.remove(stack) } -- one arg for now
-
-        invoke_inline(jvm, class, method_info, unpack(args))
+        local arg_count = #method_info.type:get().arguments
+        local args: { any } = table.create(arg_count)
+        for i = 1, arg_count do
+            table.insert(args, 1, pop(f, "any"))
+        end
+        invoke_inline(jvm, class, method_info, args)
     elseif op == 0xAC then -- ireturn
-        frame.return_from_current_frame(thread, 1, table.remove(stack))
+        frame.return_from_current_frame(thread, 1, pop(f, "1"))
     elseif op == 0xB1 then -- return
         frame.return_from_current_frame(thread, 0, nil)
     elseif op == 0xA7 then -- goto

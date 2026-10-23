@@ -1,3 +1,4 @@
+local jvm_type = require("../jvm_type")
 local t = require("../t")
 
 local frame = {}
@@ -7,18 +8,43 @@ function frame.push_on(
     class: t.JvmClass,
     method: t.MethodInfo,
     invocation: t.Invocation?,
-    ...: t.JvmValue
+    args: { t.JvmValue }
 )
-    local args = { ... }
     local frame: t.StackFrame
     if method.code.kind == "java" then
+        local locals: { any } = table.create(method.code.max_locals)
+
+        local current_arg = 1
+        local current_local = 1
+
+        if not method.static then
+            locals[current_local] = args[current_arg]
+            current_arg += 1
+            current_local += 1
+        end
+
+        for _, arg in method.type:get().arguments do
+            local val = args[current_arg]
+            locals[current_local] = val
+
+            local slots = jvm_type.slots_of(arg)
+            if slots == "2" then
+                current_local += 1
+                locals[current_local] = nil -- holes are fine here
+            end
+
+            current_arg += 1
+            current_local += 1
+        end
+
         frame = {
             method = method,
             class = class,
             loader = class.loader,
             code = method.code,
-            stack = {},
-            locals = args,
+            stack = table.create(method.code.max_stack),
+            stack_top = 0,
+            locals = locals,
             pc = 0,
             start_pc = 0,
             invocation = invocation,

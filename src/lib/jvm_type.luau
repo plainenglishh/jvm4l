@@ -1,49 +1,7 @@
 local t = require("./t")
-local descriptor_parser = {}
+local jvm_type = {}
 
-function descriptor_parser.arg_count(descriptor: string): number
-    local count = 0
-    local len = #descriptor
-    local i = 1
-
-    while i <= len and string.sub(descriptor, i, i) ~= "(" do
-        i += 1
-    end
-    i += 1
-
-    while i <= len do
-        local char = string.sub(descriptor, i, i)
-        if char == ")" then
-            break
-        end
-
-        if char == "[" then
-            i += 1
-            continue
-        elseif char == "L" then
-            i += 1
-            while i <= len and string.sub(descriptor, i, i) ~= ";" do
-                i += 1
-            end
-            count += 1
-            i += 1
-        elseif char == "J" or char == "D" then
-            count += 2
-            i += 1
-        else
-            count += 1
-            i += 1
-        end
-    end
-
-    return count
-end
-
-function descriptor_parser.ret_count(descriptor: string): number
-    return if descriptor:sub(#descriptor, #descriptor) == "V" then 0 else 1
-end
-
-function descriptor_parser.resolve_descriptor(
+function jvm_type.parse_field_descriptor(
     jvm: t.Jvm,
     descriptor: string,
     loader: t.JvmClassLoader,
@@ -85,18 +43,14 @@ function descriptor_parser.resolve_descriptor(
         local name = string.sub(descriptor, start + 1, i - 1)
         return jvm:resolve_class(name), i + 1
     elseif first_char == "[" then
-        local _, new_i = descriptor_parser.resolve_descriptor(jvm, descriptor, loader, i + 1)
+        local _, new_i = jvm_type.parse_field_descriptor(jvm, descriptor, loader, i + 1)
         return jvm:resolve_class(string.sub(descriptor, i + 1, new_i - 1), loader), new_i
     else
         error("invalid descriptor")
     end
 end
 
-function descriptor_parser.resolve_method_descriptor(
-    jvm: t.Jvm,
-    descriptor: string,
-    loader: t.JvmClassLoader
-): t.JvmMethodType
+function jvm_type.parse_method_descriptor(jvm: t.Jvm, descriptor: string, loader: t.JvmClassLoader): t.JvmMethodType
     assert(string.sub(descriptor, 1, 1) == "(", "invalid descriptor")
 
     local arguments = {}
@@ -109,7 +63,7 @@ function descriptor_parser.resolve_method_descriptor(
             break
         end
 
-        local ty, new_i = descriptor_parser.resolve_descriptor(jvm, descriptor, loader, i)
+        local ty, new_i = jvm_type.parse_field_descriptor(jvm, descriptor, loader, i)
         table.insert(arguments, ty)
         i = new_i
     end
@@ -118,7 +72,7 @@ function descriptor_parser.resolve_method_descriptor(
     if string.sub(descriptor, i, i) == "V" then
         returns = "void"
     else
-        returns = descriptor_parser.resolve_descriptor(jvm, descriptor, loader, i)
+        returns = jvm_type.parse_field_descriptor(jvm, descriptor, loader, i)
     end
 
     return {
@@ -127,7 +81,7 @@ function descriptor_parser.resolve_method_descriptor(
     }
 end
 
-function descriptor_parser.type_to_descriptor(ty: t.JvmType): string
+function jvm_type.type_to_descriptor(ty: t.JvmType): string
     if ty == "boolean" then
         return "Z"
     elseif ty == "byte" then
@@ -153,4 +107,12 @@ function descriptor_parser.type_to_descriptor(ty: t.JvmType): string
     end
 end
 
-return descriptor_parser
+function jvm_type.slots_of(ty: t.JvmType): "1" | "2"
+    if ty == "long" or ty == "double" then
+        return "2"
+    end
+
+    return "1"
+end
+
+return jvm_type

@@ -9,12 +9,12 @@ local execution_engine = {}
 --[=[
     Begins synchronous execution on the given method.
 ]=]
-function execution_engine.invoke_on(
+function execution_engine.invoke_on_sync(
     jvm: t.Jvm,
     thread: t.Thread,
     class: t.JvmClass,
     method: t.MethodInfo,
-    ...: t.JvmValue
+    args: { t.JvmValue }
 ): (boolean, ...t.JvmValue)
     if method.code.kind == "abstract" then
         jvm:throw_exception("java/lang/AbstractMethodError", method.descriptor)
@@ -24,22 +24,25 @@ function execution_engine.invoke_on(
     local stack = thread.stack
     local this_frame = stack[#stack]
     if this_frame and this_frame.code.kind == "java" then
-        jvm:throw_exception("java/lang/InternalError", "attempt to use invoke_sync in Java context, use invoke_inline")
+        jvm:throw_exception(
+            "java/lang/InternalError",
+            "attempt to use invoke_on_sync in Java context, use invoke_inline"
+        )
         error("^")
     end
 
     local invocation: t.Invocation = { state = "running" }
-    frames.push_on(stack, class, method, invocation, ...)
+    frames.push_on(stack, class, method, invocation, args)
     return executor(jvm, invocation)
 end
 
-function execution_engine.invoke(
+function execution_engine.invoke_sync(
     jvm: t.Jvm,
     class: t.JvmClass,
     method: t.MethodInfo,
-    ...: t.JvmValue
+    args: { t.JvmValue }
 ): (boolean, ...t.JvmValue)
-    return execution_engine.invoke_on(jvm, jvm.current_thread, class, method, ...)
+    return execution_engine.invoke_on_sync(jvm, jvm.current_thread, class, method, args)
 end
 
 return execution_engine

@@ -1,4 +1,4 @@
-local t = require("../t")
+local t = require("./t")
 
 local GarbageCollector = {}
 GarbageCollector.__index = GarbageCollector

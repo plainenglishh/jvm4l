@@ -1,4 +1,3 @@
-local descriptor_parser = require("./descriptor_parser")
 local t = require("./t")
 
 local typechecker = {}
@@ -61,9 +60,8 @@ end
 
     Will resolve types.
 ]=]
-function typechecker.check_field(jvm: t.Jvm, value: t.JvmValue, class: t.JvmClass, target: t.FieldInfo)
-    local field_type = descriptor_parser.resolve_descriptor(jvm, target.descriptor, class.loader)
-    return typechecker.check_value(value, field_type)
+function typechecker.check_field(jvm: t.Jvm, value: t.JvmValue, class: t.JvmClass, target: t.FieldInfo): boolean
+    return typechecker.check_value(value, target.type:get())
 end
 
 --[=[
@@ -72,11 +70,13 @@ end
     Will resolve types.
 ]=]
 function typechecker.check_method(jvm: t.Jvm, values: { t.JvmValue }, class: t.JvmClass, target: t.MethodInfo): boolean
-    local method_type = descriptor_parser.resolve_method_descriptor(jvm, target.descriptor, class.loader)
+    local method_type = target.type:get()
 
     if #values ~= #method_type.arguments then
         return false
     end
+
+    -- todo: check this
 
     for i = 1, #method_type.arguments do
         if not typechecker.check_value(values[i], method_type.arguments[i]) then
