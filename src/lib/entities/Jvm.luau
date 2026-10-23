@@ -209,7 +209,7 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
 
     self._gc = GarbageCollector._new(self)
     bootstrap_core_classes(self)
-    self.current_thread = self:_create_thread(false)
+    self.current_thread = self:create_thread(false)
 
     return self
 end
@@ -226,7 +226,7 @@ function Jvm._interrupt(self: t.Jvm)
     end
 end
 
-function Jvm._create_thread(self: t.Jvm, daemon: boolean): t.Thread
+function Jvm.create_thread(self: t.Jvm, daemon: boolean, runnable: t.MethodInfo?): t.Thread
     local thread: t.Thread = {
         id = self._next_thread_id,
         stack = {},
@@ -238,7 +238,13 @@ function Jvm._create_thread(self: t.Jvm, daemon: boolean): t.Thread
     self._next_thread_id += 1
     local mirror = self._classes.bootstrap["java/lang/Thread"]:new_uninitialised({ kind = "thread", value = thread })
     thread.mirror = mirror
+
+    if runnable then
+        util.unimplemented("runnable thread targets not yet implemented")
+    end
+
     table.insert(self._threads, thread)
+
     self:_trace(`created thread #{thread.id}`)
     return thread
 end

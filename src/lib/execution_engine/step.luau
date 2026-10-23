@@ -19,7 +19,7 @@ local function invoke_inline(jvm: t.Jvm, class: t.JvmClass, method: t.MethodInfo
         error("^")
     end
 
-    frame.push_on(thread, class, method, nil, args)
+    frame.push_on(jvm, thread, class, method, nil, args)
 end
 
 local function read_u16be(b: buffer, offset: number): number

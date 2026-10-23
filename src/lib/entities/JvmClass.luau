@@ -117,7 +117,7 @@ end
 
 function JvmClass.new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t.JvmObject
     assert(self._state ~= "error")
-    return JvmObject._allocate(self.jvm, self, magic)
+    return JvmObject._new(self.jvm, self, magic)
 end
 
 function JvmClass.new(self: t.JvmClass, _constructor: t.MethodRef, ...: t.JvmValue): t.JvmObject

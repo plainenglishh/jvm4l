@@ -12,6 +12,7 @@ local t = {}
 
 --------------------------------------------------------------------------------
 
+--- A lazily loaded value.
 export type Lazy<T> = setmetatable<{
     _init: () -> T,
     _ready: boolean,
@@ -66,7 +67,7 @@ export type JvmMethodType = {
 ]=]
 export type Jvm = setmetatable<
     {
-        read _settings: JvmSettings,
+        read _settings: _JvmSettings,
         read _classes: { [JvmClassLoader]: { [string]: JvmClass } },
         read _threads: { Thread },
         current_thread: Thread,
@@ -88,7 +89,7 @@ export type Jvm = setmetatable<
 
         _trace: (self: Jvm, message: string) -> (),
 
-        _create_thread: (self: Jvm, daemon: boolean) -> Thread,
+        create_thread: (self: Jvm, daemon: boolean, runnable: MethodInfo?) -> Thread,
         _interrupt: (self: Jvm) -> (),
 
         get_loader: (self: Jvm) -> JvmClassLoader,
@@ -131,6 +132,7 @@ export type Jvm = setmetatable<
     }
 >
 
+--- Settings used to control JVM behaviour.
 export type IntoJvmSettings = {
     quantum: number?,
     interrupt: InterruptCallback?,
@@ -138,15 +140,19 @@ export type IntoJvmSettings = {
     trace: TraceCallback?,
 }
 
-export type JvmSettings = {
+--- Resolved version of `IntoJvmSettings`.
+export type _JvmSettings = {
     quantum: number,
     interrupt: InterruptCallback?,
     link_native: LinkNativeCallback,
     trace: TraceCallback?,
 }
 
+--- Callback used to link native methods.
 export type LinkNativeCallback = (class_name: string, signature: string) -> NativeMethod?
+--- Callback called at VM safepoints.
 export type InterruptCallback = (jvm: Jvm) -> ()
+--- Callback used to emit internal debug traces.
 export type TraceCallback = (message: string) -> ()
 
 --- A reference to a class loader. Either "bootstrap", or a reference to a user-defined loader.
@@ -171,12 +177,7 @@ export type GarbageCollector = setmetatable<
 --- Callback provided to GC implementations by the JVM to run finalisers on an object. Return value indicates whether to resurrect. Handles deallocation of classes under classloaders.
 export type GcFinalise = (object: JvmObject) -> boolean
 
---[=[
-    A class representing a thread of execution in a JVM. 
-    
-    This is a handler owned by the root Jvm that handles the dispatching of 
-    methods to its internal thread.
-]=]
+--- Representation of a thread of execution.
 export type Thread = {
     id: number,
     stack: { StackFrame },
@@ -189,6 +190,7 @@ export type Thread = {
 }
 export type ThreadState = "new" | "runnable" | "blocked" | "waiting" | "timed_waiting" | "terminated"
 
+--- Representation of a single stack frame.
 export type StackFrame =
     {
         method: MethodInfo,
@@ -211,6 +213,7 @@ export type StackFrame =
         invocation: Invocation?,
     }
 
+--- Invocation token used as executor targets to get method return values synchronously.
 export type Invocation =
     {
         state: "running",
@@ -259,8 +262,7 @@ export type JvmClass = setmetatable<
         __display: (self: JvmClass) -> string,
 
         --[=[
-			Constructs a new class. Not to be confused with `JvmClass:new`, 
-			which creates an Object from this class.
+			Constructs and prepares a new Class.
 		]=]
         _prepare: (
             jvm: Jvm,
@@ -274,7 +276,16 @@ export type JvmClass = setmetatable<
         ) -> JvmClass,
 
         --[=[
-			Calls the class initialiser on this class.
+			Calls the class initialiser on this class if it hasn't been called
+            already.
+
+            Must be called before:
+            1. instantiating objects of this class;
+            2. interacting with static methods or fields belonging to this class;
+            4. initialisation of a subclass;
+            5. if an interface, initialisation of a class that implements this interface (if it implements non abstract/non static methods);
+            6. its use as the initial class on startup.
+            7. some reflection/invoke methods (see jvms 5.5) 
 		]=]
         _ensure_initialised: (self: JvmClass) -> (),
 
@@ -349,6 +360,7 @@ export type JvmObject = setmetatable<
     }
 >
 
+--- 'Magic' values tagged onto special classes.
 export type _MagicValue =
     {
         kind: "string", -- java/lang/String
@@ -373,6 +385,7 @@ export type _MagicValue =
         stack: { StackFrame },
     }
 
+--- Field metadata.
 export type FieldInfo = {
     read name: string,
     read descriptor: string,
@@ -390,11 +403,19 @@ export type FieldInfo = {
     read enum: boolean,
 }
 
+--- Unresolved field reference.
 export type FieldRef = {
     read class: JvmClass,
     read name: string,
 }
 
+--- Resolved field handle.
+export type FieldHandle = {
+    read class: JvmClass,
+    read field_info: FieldInfo,
+}
+
+--- Method metadata.
 export type MethodInfo = {
     read name: string,
     read descriptor: string,
@@ -416,9 +437,16 @@ export type MethodInfo = {
     read synthetic: boolean,
 }
 
+--- Unresolved method reference.
 export type MethodRef = {
     read class: JvmClass,
     read name: string,
+}
+
+--- Resolved method handle.
+export type MethodHandle = {
+    read class: JvmClass,
+    read method_info: MethodInfo,
 }
 
 --[=[
