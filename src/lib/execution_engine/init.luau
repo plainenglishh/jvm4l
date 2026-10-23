@@ -9,8 +9,9 @@ local execution_engine = {}
 --[=[
     Begins synchronous execution on the given method.
 ]=]
-function execution_engine.invoke(
+function execution_engine.invoke_on(
     jvm: t.Jvm,
+    thread: t.Thread,
     class: t.JvmClass,
     method: t.MethodInfo,
     ...: t.JvmValue
@@ -20,7 +21,6 @@ function execution_engine.invoke(
         error("^")
     end
 
-    local thread = jvm.current_thread
     local stack = thread.stack
     local this_frame = stack[#stack]
     if this_frame and this_frame.code.kind == "java" then
@@ -31,6 +31,15 @@ function execution_engine.invoke(
     local invocation: t.Invocation = { state = "running" }
     frames.push_on(stack, class, method, invocation, ...)
     return executor(jvm, invocation)
+end
+
+function execution_engine.invoke(
+    jvm: t.Jvm,
+    class: t.JvmClass,
+    method: t.MethodInfo,
+    ...: t.JvmValue
+): (boolean, ...t.JvmValue)
+    return execution_engine.invoke_on(jvm, jvm.current_thread, class, method, ...)
 end
 
 return execution_engine
