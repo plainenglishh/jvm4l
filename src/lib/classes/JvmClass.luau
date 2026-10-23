@@ -14,7 +14,7 @@ function JvmClass.__display(self: t.JvmClass): string
     return tostring(self)
 end
 
-function JvmClass._allocate(
+function JvmClass._prepare(
     jvm: t.Jvm,
     loader: t.JvmClassLoader,
     name: string,
@@ -92,22 +92,27 @@ function JvmClass._allocate(
     return self
 end
 
-function JvmClass._initialise(self: t.JvmClass)
+function JvmClass._ensure_initialised(self: t.JvmClass)
     assert(self._state ~= "error")
-
-    self.jvm:_trace(`initialising class {self.name}`)
-
     if self._state ~= "uninitialised" then
         return
     end
 
-    local clinit_ref = self.jvm:get_method_ref(self, "<clinit>", "()V")
-    local clinit_info = self:resolve_method(clinit_ref)
-    if not clinit_info then
-        return
+    -- FIXME: block other threads waiting for this to be initialised !
+    self._state = "initialising"
+    self.jvm:_trace(`initialising class {self.name}`)
+
+    if self.super then
+        self.super:_ensure_initialised()
     end
 
-    util.unimplemented("clinit not implemented")
+    local clinit_ref = self.jvm:get_method_ref(self, "<clinit>", "()V")
+    local clinit_info = self:resolve_method(clinit_ref)
+    if clinit_info then
+        self.jvm:invoke(self, clinit_info, {})
+    end
+
+    self._state = "initialised"
 end
 
 function JvmClass.new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t.JvmObject

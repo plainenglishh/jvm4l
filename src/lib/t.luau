@@ -262,7 +262,7 @@ export type JvmClass = setmetatable<
 			Constructs a new class. Not to be confused with `JvmClass:new`, 
 			which creates an Object from this class.
 		]=]
-        _allocate: (
+        _prepare: (
             jvm: Jvm,
             loader: JvmClassLoader,
             name: string,
@@ -276,7 +276,7 @@ export type JvmClass = setmetatable<
         --[=[
 			Calls the class initialiser on this class.
 		]=]
-        _initialise: (self: JvmClass) -> (),
+        _ensure_initialised: (self: JvmClass) -> (),
 
         --[=[
 			Creates a new Object from this class, without initialising it.

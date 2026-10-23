@@ -146,7 +146,7 @@ local function bootstrap_core_classes(self: t.Jvm)
     local object_classfile = class_parser.parse(jcl_classfiles["java/lang/Object"])
     local object_methods, object_fields = get_members(self, object_classfile, "bootstrap")
 
-    local object = JvmClass._allocate(
+    local object = JvmClass._prepare(
         self,
         "bootstrap",
         "java/lang/Object",
@@ -161,7 +161,7 @@ local function bootstrap_core_classes(self: t.Jvm)
     local class_classfile = class_parser.parse(jcl_classfiles["java/lang/Class"])
     local class_methods, class_fields = get_members(self, class_classfile, "bootstrap")
 
-    local class = JvmClass._allocate(
+    local class = JvmClass._prepare(
         self,
         "bootstrap",
         "java/lang/Class",
@@ -279,7 +279,7 @@ local function get_array_class(self: t.Jvm, name: string, initiating_loader: t.J
     end
 
     local Object = self._classes.bootstrap["java/lang/Object"]
-    local class = JvmClass._allocate(self, defining_loader, name, Object, {}, ARRAY_METHODS, {})
+    local class = JvmClass._prepare(self, defining_loader, name, Object, {}, ARRAY_METHODS, {})
     register_class(self, defining_loader, class)
     self:_trace(`created array class {name}`)
     return class
@@ -344,7 +344,7 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
 
     local methods, fields = get_members(self, classfile, defining_loader)
     local class =
-        JvmClass._allocate(self, defining_loader, this_class_name, super_class, implements, methods, fields, classfile)
+        JvmClass._prepare(self, defining_loader, this_class_name, super_class, implements, methods, fields, classfile)
     register_class(self, defining_loader, class)
 
     self:_trace(`loaded class {this_class_name} from loader {defining_loader}`)

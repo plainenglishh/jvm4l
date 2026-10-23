@@ -4,6 +4,8 @@
 
 ## Short Term Goals
 
+- [ ] important!: clarify class lifecycle. when classes are loaded, initialised, etc, and when to resolve symbolic references (jvmtype is currently a live reference, should it be symbolic?)
+- [ ] consider 'unflattening' method/field tables
 - [X] Descriptor to `JvmType`
 - [X] Exceptions (simply the objects themselves, rather than catching)
 - [X] Field value get/set
@@ -16,4 +18,6 @@
 
 ## Long Term Goals
 
+- [ ] Ability to create threads with runnable targets
+- [ ] Complete all opcodes
 - [ ] Magic luau interop classes (maybe even don't treat java/lang/String as a magic class, but back it with a magic jvl4/luau/String?)
