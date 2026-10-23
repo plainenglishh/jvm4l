@@ -1,4 +1,4 @@
-local JvmObject = require("../classes/JvmObject")
+local JvmObject = require("../entities/JvmObject")
 local t = require("../t")
 local frame = require("./frame")
 local scheduler = require("./scheduler")

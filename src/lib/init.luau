@@ -57,6 +57,6 @@ export type CfAttributeInfo = t.CfAttributeInfo
 ]=]
 local jvm4l = {}
 
-jvm4l.Jvm = require("@self/classes/Jvm")
+jvm4l.Jvm = require("@self/entities/Jvm")
 
 return jvm4l
