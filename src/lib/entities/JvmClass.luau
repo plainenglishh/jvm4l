@@ -57,7 +57,7 @@ function JvmClass._prepare(
     end
 
     if name ~= "java/lang/Object" and name ~= "java/lang/Class" then
-        local mirror = jvm._classes.bootstrap["java/lang/Class"]:new_uninitialised({
+        local mirror = jvm._classes.bootstrap["java/lang/Class"]:_new_uninitialised({
             kind = "class",
             value = self,
         })
@@ -99,13 +99,13 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
     self._state = "initialised"
 end
 
-function JvmClass.new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t.JvmObject
+function JvmClass._new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t.JvmObject
     assert(self._state ~= "error")
     return JvmObject._new(self.jvm, self, magic)
 end
 
 function JvmClass.new(self: t.JvmClass, _constructor: t.MethodHandle, ...: t.JvmValue): t.JvmObject
-    local o = self:new_uninitialised()
+    local o = self:_new_uninitialised()
     -- TODO: Select and call initialiser.
     return o
 end

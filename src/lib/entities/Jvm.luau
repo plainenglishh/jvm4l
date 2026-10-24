@@ -175,10 +175,10 @@ local function bootstrap_core_classes(self: t.Jvm)
     )
     self._classes.bootstrap["java/lang/Class"] = class
 
-    local object_mirror = class:new_uninitialised({ kind = "class", value = object })
+    local object_mirror = class:_new_uninitialised({ kind = "class", value = object })
     object._mirror = object_mirror
 
-    local class_mirror = class:new_uninitialised({ kind = "class", value = class })
+    local class_mirror = class:_new_uninitialised({ kind = "class", value = class })
     class._mirror = class_mirror
 
     self:resolve_class("java/lang/String")
@@ -238,7 +238,7 @@ function Jvm.create_thread(self: t.Jvm, daemon: boolean, runnable: t.MethodInfo?
         budget = 0,
     }
     self._next_thread_id += 1
-    local mirror = self._classes.bootstrap["java/lang/Thread"]:new_uninitialised({ kind = "thread", value = thread })
+    local mirror = self._classes.bootstrap["java/lang/Thread"]:_new_uninitialised({ kind = "thread", value = thread })
     thread.mirror = mirror
 
     if runnable then
@@ -569,7 +569,7 @@ function Jvm.create_string(self: t.Jvm, value: string): t.JvmObject
     end
 
     local String = self._classes.bootstrap["java/lang/String"]
-    local str_obj = String:new_uninitialised({ kind = "string", value = value })
+    local str_obj = String:_new_uninitialised({ kind = "string", value = value })
     self._interned_strings[value] = str_obj
     return str_obj
 end
@@ -581,7 +581,7 @@ function Jvm.create_array(self: t.Jvm, element: t.JvmType, size_or_values: numbe
 
     local size = if type(size_or_values) == "number" then size_or_values else #size_or_values
 
-    local array = class:new_uninitialised({
+    local array = class:_new_uninitialised({
         kind = "array",
         element = element,
         length = size,
@@ -612,7 +612,7 @@ function Jvm.create_exception(
         magic = { kind = "throwable", stack = table.clone(self.current_thread.stack) }
     end
 
-    local e = Exception:new_uninitialised(magic)
+    local e = Exception:_new_uninitialised(magic)
 
     local Throwable = self._classes.bootstrap["java/lang/Throwable"]
     local message_field = self:resolve_field(Throwable, "message", "Ljava/lang/String;")

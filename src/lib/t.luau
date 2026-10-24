@@ -344,7 +344,7 @@ export type JvmClass = setmetatable<
         --[=[
 			Creates a new Object from this class, without initialising it.
 		]=]
-        new_uninitialised: (self: JvmClass, magic: _MagicValue?) -> JvmObject,
+        _new_uninitialised: (self: JvmClass, magic: _MagicValue?) -> JvmObject,
 
         --[=[
 			Creates a new Object from this class, dynamically selecting a
