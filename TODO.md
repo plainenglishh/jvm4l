@@ -4,6 +4,7 @@
 
 ## Short Term Goals
 
+- [ ] reflection methods on JvmClass.
 - [X] important!: clarify class lifecycle. when classes are loaded, initialised, etc, and when to resolve symbolic references (jvmtype is currently a live reference, should it be symbolic?)
 - [X] lazily loaded constant pool (backed by the classfile)
 - [ ] TESTING!!
