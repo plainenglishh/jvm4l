@@ -14,6 +14,14 @@ function ConstantPool.new(class: t.JvmClass): t.ConstantPool
     }, ConstantPool))
 end
 
-function ConstantPool.get(self: t.ConstantPool, idx: number, kind: string): any end
+function ConstantPool.get(self: t.ConstantPool, idx: number, type: string): any 
+    local resolved = self._resolved[idx]
+    if resolved then
+        check_type(resolved, type)
+        return resolved
+    end
+
+    
+end
 
 return table.freeze(ConstantPool)
