@@ -45,8 +45,8 @@ local function get_method_ref_from_k(jvm: t.Jvm, classfile: t.Classfile, idx: nu
 
     local class_name, name, descriptor =
         class_parser.class_name(classfile, classref),
-        class_parser.string_value(classfile, name_and_type.name_index),
-        class_parser.string_value(classfile, name_and_type.descriptor_index)
+        class_parser.utf8_value(classfile, name_and_type.name_index),
+        class_parser.utf8_value(classfile, name_and_type.descriptor_index)
 
     local class = jvm:resolve_class(class_name)
     local method_ref = jvm:get_method_ref(class, name, descriptor)

@@ -307,7 +307,7 @@ function class_parser.class_name(classfile: t.Classfile, class: t.CfCpInfo_Class
     return utf8.value
 end
 
-function class_parser.string_value(classfile: t.Classfile, idx: number): string
+function class_parser.utf8_value(classfile: t.Classfile, idx: number): string
     local utf8 = classfile.constant_pool[idx]
     assert(utf8.tag == "Utf8")
     return utf8.value
@@ -329,7 +329,7 @@ function class_parser.get_attribute_info(
     name: string
 ): t.CfAttributeInfo?
     for _, attribute in attributes do
-        if class_parser.string_value(classfile, attribute.name_index) == name then
+        if class_parser.utf8_value(classfile, attribute.name_index) == name then
             return attribute
         end
     end

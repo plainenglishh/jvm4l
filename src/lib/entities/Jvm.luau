@@ -37,8 +37,8 @@ local function get_members(
     local methods: { t.MethodInfo } = {}
 
     for _, method in classfile.methods do
-        local name = class_parser.string_value(classfile, method.name_index)
-        local descriptor = class_parser.string_value(classfile, method.descriptor_index)
+        local name = class_parser.utf8_value(classfile, method.name_index)
+        local descriptor = class_parser.utf8_value(classfile, method.descriptor_index)
         local signature = `{name}:{descriptor}`
         local native = bit32.band(method.access_flags, 0x0100) ~= 0
         local abstract = bit32.band(method.access_flags, 0x0400) ~= 0
@@ -115,8 +115,8 @@ local function get_members(
     local fields = {}
 
     for _, field in classfile.fields do
-        local name = class_parser.string_value(classfile, field.name_index)
-        local descriptor = class_parser.string_value(classfile, field.descriptor_index)
+        local name = class_parser.utf8_value(classfile, field.name_index)
+        local descriptor = class_parser.utf8_value(classfile, field.descriptor_index)
 
         table.insert(fields :: { any }, {
             name = name,

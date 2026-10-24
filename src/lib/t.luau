@@ -23,7 +23,24 @@ export type Lazy<T> = setmetatable<{
     get: (self: Lazy<T>) -> T,
 }>
 
-export type ConstantValue = JvmValue | JvmClass | MethodRef | FieldRef
+export type ConstantValueType =
+    "class"
+    | "field"
+    | "method"
+    | "interface_method"
+    | "string"
+    | "integer"
+    | "float"
+    | "double"
+    | "long"
+
+export type ConstantValue =
+    | { type: "class", value: JvmClass }
+    | { type: "field", value: FieldHandle }
+    | { type: "method" | "interface_method", value: MethodHandle }
+    | { type: "string", value: JvmObject }
+    | { type: "integer" | "float" | "double", value: number }
+    | { type: "long", value: integer }
 
 export type ConstantPool = setmetatable<
     {
@@ -35,12 +52,14 @@ export type ConstantPool = setmetatable<
     {
         read __index: getmetatable<ConstantPool>,
         read new: (class: JvmClass) -> ConstantPool,
-        read get: & ((self: ConstantPool, idx: number, kind: "int" | "float" | "double") -> number)
-            & ((self: ConstantPool, idx: number, kind: "long") -> integer)
-            & ((self: ConstantPool, idx: number, kind: "string") -> JvmObject)
-            & ((self: ConstantPool, idx: number, kind: "methodref") -> MethodRef)
-            & ((self: ConstantPool, idx: number, kind: "fieldref") -> FieldRef)
-            & ((self: ConstantPool, idx: number, kind: "class") -> JvmClass),
+        read _resolve: (self: ConstantPool, idx: number) -> ConstantValue,
+        read is: (self: ConstantPool, idx: number, type: ConstantValueType) -> boolean,
+        read get: & ((self: ConstantPool, idx: number, type: "class") -> JvmClass)
+            & ((self: ConstantPool, idx: number, type: "field") -> FieldRef)
+            & ((self: ConstantPool, idx: number, type: "method" | "interface_method") -> MethodRef)
+            & ((self: ConstantPool, idx: number, type: "string") -> JvmObject)
+            & ((self: ConstantPool, idx: number, type: "integer" | "float" | "double") -> number)
+            & ((self: ConstantPool, idx: number, type: "long") -> integer),
     }
 >
 
