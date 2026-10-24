@@ -34,8 +34,7 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
             class_parser.utf8_value(classfile, name_and_type.name_index),
             class_parser.utf8_value(classfile, name_and_type.descriptor_index)
         local class = self:get(cp_info.class_index, "class")
-        -- TODO: Resolve to FieldHandle
-        return util.unimplemented()
+        value = { type = "field" :: "field", value = self._jvm:resolve_field(class, name, descriptor) }
     elseif cp_info.tag == "Methodref" then
         local name_and_type = classfile.constant_pool[cp_info.name_and_type_index]
         assert(name_and_type.tag == "NameAndType")
@@ -43,8 +42,7 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
             class_parser.utf8_value(classfile, name_and_type.name_index),
             class_parser.utf8_value(classfile, name_and_type.descriptor_index)
         local class = self:get(cp_info.class_index, "class")
-        -- TODO: Resolve to MethodHandle
-        return util.unimplemented()
+        value = { type = "method" :: "method", value = self._jvm:resolve_method(class, name, descriptor) }
     elseif cp_info.tag == "InterfaceMethodref" then
         local name_and_type = classfile.constant_pool[cp_info.name_and_type_index]
         assert(name_and_type.tag == "NameAndType")
@@ -52,8 +50,10 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
             class_parser.utf8_value(classfile, name_and_type.name_index),
             class_parser.utf8_value(classfile, name_and_type.descriptor_index)
         local class = self:get(cp_info.class_index, "class")
-        -- TODO: Resolve to MethodHandle
-        return util.unimplemented()
+        value = {
+            type = "interface_method" :: "interface_method",
+            value = self._jvm:resolve_method(class, name, descriptor),
+        }
     elseif cp_info.tag == "String" then
         local str = self._jvm:create_string(class_parser.utf8_value(classfile, cp_info.string_index))
         value = { type = "string" :: "string", value = str }

@@ -23,9 +23,9 @@ native_methods["java/lang/Throwable"] = {
         local Throwable = jvm:resolve_class("java/lang/Throwable")
 
         local StackTraceElement = jvm:resolve_class("java/lang/StackTraceElement")
-        local stacktrace_ref = jvm:get_field_ref(Throwable, "stacktrace", "[Ljava/lang/StackTraceElement;")
-        local declaring_class_ref = jvm:get_field_ref(StackTraceElement, "declaringClass", "Ljava/lang/String;")
-        local method_name_ref = jvm:get_field_ref(StackTraceElement, "methodName", "Ljava/lang/String;")
+        local stacktrace_ref = jvm:resolve_field(Throwable, "stacktrace", "[Ljava/lang/StackTraceElement;")
+        local declaring_class_ref = jvm:resolve_field(StackTraceElement, "declaringClass", "Ljava/lang/String;")
+        local method_name_ref = jvm:resolve_field(StackTraceElement, "methodName", "Ljava/lang/String;")
 
         local magic = this._magic
         assert(magic and magic.kind == "throwable")

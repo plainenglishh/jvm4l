@@ -32,7 +32,7 @@ function JvmObject.__tostring(self: t.JvmObject): string
         return string.format("<JvmObject: %s@%08x>", self.class.fqcn, bits)
     end
 
-    local message_ref = self.jvm:get_field_ref(Throwable, "message", "Ljava/lang/String;")
+    local message_ref = self.jvm:resolve_field(Throwable, "message", "Ljava/lang/String;")
     local message = self:get_field(message_ref) :: t.JvmObjectRef
     local message_str = ""
     if message then
@@ -51,7 +51,7 @@ function JvmObject.__tostring(self: t.JvmObject): string
         stack_trace = "\n" .. table.concat(builder, "\n")
     end
 
-    local cause = self:get_field(self.jvm:get_field_ref(Throwable, "cause", "Ljava/lang/Throwable;"))
+    local cause = self:get_field(self.jvm:resolve_field(Throwable, "cause", "Ljava/lang/Throwable;"))
     local cause_str = ""
     if cause then
         cause_str = "\nCaused by: " .. tostring(cause)
@@ -87,7 +87,7 @@ function JvmObject._new(jvm: t.Jvm, class: t.JvmClass, magic: t._MagicValue?): t
         _field_values = {},
     }
     inner.hash_code = hashcode_of(inner)
-    local self = setmetatable(inner, JvmObject)
+    local self: t.JvmObject = setmetatable(inner, JvmObject)
     jvm._gc:_track(self)
     return self
 end
@@ -104,15 +104,14 @@ function JvmObject.implements(self: t.JvmObject, interface: t.JvmClass): boolean
     return self.class:implements(interface)
 end
 
-function JvmObject.get_field(self: t.JvmObject, field: t.FieldRef): t.JvmValue
+function JvmObject.get_field(self: t.JvmObject, field: t.FieldHandle): t.JvmValue
     assert(self:instance_of(field.class))
     return self._field_values[field]
 end
 
-function JvmObject.set_field(self: t.JvmObject, field: t.FieldRef, value: t.JvmValue)
+function JvmObject.set_field(self: t.JvmObject, field: t.FieldHandle, value: t.JvmValue)
     assert(self:instance_of(field.class))
-    local field_info = self.class:resolve_field(field) or error("")
-    if not typechecker.check_field(self.jvm, value, self.class, field_info) then
+    if not typechecker.check_field(self.jvm, value, self.class, field.field_info) then
         self.jvm:throw_exception("java/lang/IllegalArgumentException")
     end
     self._field_values[field] = value

@@ -3,6 +3,10 @@
 local t = require("@self/t")
 
 --EXPORT_BEGIN
+export type Lazy<T> = t.Lazy<T>
+export type ConstantValueType = t.ConstantValueType
+export type ConstantValue = t.ConstantValue
+export type ConstantPool = t.ConstantPool
 export type JvmInt = t.JvmInt
 export type JvmFloat = t.JvmFloat
 export type JvmLong = t.JvmLong
@@ -12,25 +16,35 @@ export type JvmReal = t.JvmReal
 export type JvmPrimitive = t.JvmPrimitive
 export type JvmObjectRef = t.JvmObjectRef
 export type JvmValue = t.JvmValue
+export type IntoJvmValue = t.IntoJvmValue
 export type JvmType = t.JvmType
+export type JvmMethodType = t.JvmMethodType
 export type Jvm = t.Jvm
+export type IntoJvmSettings = t.IntoJvmSettings
 export type LinkNativeCallback = t.LinkNativeCallback
+export type InterruptCallback = t.InterruptCallback
+export type TraceCallback = t.TraceCallback
 export type JvmClassLoader = t.JvmClassLoader
 export type GarbageCollector = t.GarbageCollector
 export type GcFinalise = t.GcFinalise
-export type JvmThread = t.Thread
+export type Thread = t.Thread
 export type ThreadState = t.ThreadState
 export type StackFrame = t.StackFrame
+export type Invocation = t.Invocation
 export type Monitor = t.Monitor
 export type JvmClass = t.JvmClass
 export type JvmClassState = t.JvmClassState
 export type JvmObject = t.JvmObject
 export type FieldInfo = t.FieldInfo
-export type FieldRef = t.FieldRef
+export type FieldHandle = t.FieldHandle
 export type MethodInfo = t.MethodInfo
-export type MethodRef = t.MethodRef
+export type MethodHandle = t.MethodHandle
 export type NativeMethod = t.NativeMethod
 export type MethodCode = t.MethodCode
+export type MethodCodeLuau = t.MethodCodeLuau
+export type MethodCodeJava = t.MethodCodeJava
+export type ExceptionHandler = t.ExceptionHandler
+export type MethodCodeAbstract = t.MethodCodeAbstract
 export type Classfile = t.Classfile
 export type CfCpInfo_Class = t.CfCpInfo_Class
 export type CfCpInfo_Fieldref = t.CfCpInfo_Fieldref
@@ -50,6 +64,7 @@ export type CfCpInfo = t.CfCpInfo
 export type CfFieldInfo = t.CfFieldInfo
 export type CfMethodInfo = t.CfMethodInfo
 export type CfAttributeInfo = t.CfAttributeInfo
+export type CfCodeAttribute = t.CfCodeAttribute
 --EXPORT_END
 
 --[=[

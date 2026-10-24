@@ -12,12 +12,12 @@ local execution_engine = {}
 function execution_engine.invoke_on_sync(
     jvm: t.Jvm,
     thread: t.Thread,
-    class: t.JvmClass,
-    method: t.MethodInfo,
+    method: t.MethodHandle,
     args: { t.JvmValue }
 ): (boolean, ...t.JvmValue)
-    if method.code.kind == "abstract" then
-        jvm:throw_exception("java/lang/AbstractMethodError", method.descriptor)
+    local method_info = method.method_info
+    if method_info.code.kind == "abstract" then
+        jvm:throw_exception("java/lang/AbstractMethodError", method_info.descriptor)
         error("^")
     end
 
@@ -32,17 +32,16 @@ function execution_engine.invoke_on_sync(
     end
 
     local invocation: t.Invocation = { state = "running" }
-    frames.push_on(jvm, thread, class, method, invocation, args)
+    frames.push_on(jvm, thread, method, invocation, args)
     return executor(jvm, invocation)
 end
 
 function execution_engine.invoke_sync(
     jvm: t.Jvm,
-    class: t.JvmClass,
-    method: t.MethodInfo,
+    method: t.MethodHandle,
     args: { t.JvmValue }
 ): (boolean, ...t.JvmValue)
-    return execution_engine.invoke_on_sync(jvm, jvm.current_thread, class, method, args)
+    return execution_engine.invoke_on_sync(jvm, jvm.current_thread, method, args)
 end
 
 return execution_engine

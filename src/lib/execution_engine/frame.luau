@@ -6,25 +6,27 @@ local frame = {}
 function frame.push_on(
     jvm: t.Jvm,
     thread: t.Thread,
-    class: t.JvmClass,
-    method: t.MethodInfo,
+    method: t.MethodHandle,
     invocation: t.Invocation?,
     args: { t.JvmValue }
 )
     local frame: t.StackFrame
-    if method.code.kind == "java" then
-        local locals: { any } = table.create(method.code.max_locals)
+    local method_info = method.method_info
+    local class = method.class
+
+    if method_info.code.kind == "java" then
+        local locals: { any } = table.create(method_info.code.max_locals)
 
         local current_arg = 1
         local current_local = 1
 
-        if not method.static then
+        if not method_info.static then
             locals[current_local] = args[current_arg]
             current_arg += 1
             current_local += 1
         end
 
-        for _, arg in method.type:get().arguments do
+        for _, arg in method_info.type:get().arguments do
             local val = args[current_arg]
             locals[current_local] = val
 
@@ -42,26 +44,26 @@ function frame.push_on(
             method = method,
             class = class,
             loader = class.loader,
-            code = method.code,
-            stack = table.create(method.code.max_stack),
+            code = method_info.code,
+            stack = table.create(method_info.code.max_stack),
             stack_top = 0,
             locals = locals,
             pc = 0,
             start_pc = 0,
             invocation = invocation,
         } :: t.StackFrame
-    elseif method.code.kind == "luau" then
+    elseif method_info.code.kind == "luau" then
         frame = {
             method = method,
             class = class,
             loader = class.loader,
-            code = method.code,
+            code = method_info.code,
             args = args,
             invocation = invocation,
         } :: t.StackFrame
     end
 
-    jvm:_trace(`pushed frame #{#thread.stack + 1} on thread #{thread.id} ({class.fqcn}.{method.signature})`)
+    jvm:_trace(`pushed frame #{#thread.stack + 1} on thread #{thread.id} ({class.fqcn}.{method_info.signature})`)
 
     table.insert(thread.stack, frame)
 end

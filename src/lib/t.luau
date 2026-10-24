@@ -55,8 +55,8 @@ export type ConstantPool = setmetatable<
         read _resolve: (self: ConstantPool, idx: number) -> ConstantValue,
         read is: (self: ConstantPool, idx: number, type: ConstantValueType) -> boolean,
         read get: & ((self: ConstantPool, idx: number, type: "class") -> JvmClass)
-            & ((self: ConstantPool, idx: number, type: "field") -> FieldRef)
-            & ((self: ConstantPool, idx: number, type: "method" | "interface_method") -> MethodRef)
+            & ((self: ConstantPool, idx: number, type: "field") -> FieldHandle)
+            & ((self: ConstantPool, idx: number, type: "method" | "interface_method") -> MethodHandle)
             & ((self: ConstantPool, idx: number, type: "string") -> JvmObject)
             & ((self: ConstantPool, idx: number, type: "integer" | "float" | "double") -> number)
             & ((self: ConstantPool, idx: number, type: "long") -> integer),
@@ -116,8 +116,8 @@ export type Jvm = setmetatable<
 
         _gc: GarbageCollector,
         read _interned_strings: { [string]: JvmObject },
-        read _interned_method_refs: { [JvmClass]: { [string]: { [string]: MethodRef } } },
-        read _interned_field_refs: { [JvmClass]: { [string]: { [string]: FieldRef } } },
+        read _interned_method_handles: { [JvmClass]: { [string]: { [string]: MethodHandle } } }, -- class, name, descriptor
+        read _interned_field_handles: { [JvmClass]: { [string]: { [string]: FieldHandle } } }, -- class, name, descriptor
     },
     {
         __type: "Jvm",
@@ -137,8 +137,8 @@ export type Jvm = setmetatable<
         resolve_class: (self: Jvm, name: string, initiating_loader: JvmClassLoader?) -> JvmClass,
         define_class: (self: Jvm, classfile: buffer, defining_loader: JvmClassLoader) -> JvmClass,
 
-        get_method_ref: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> MethodRef,
-        get_field_ref: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> FieldRef,
+        resolve_field: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> FieldHandle,
+        resolve_method: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> MethodHandle,
 
         create_string: (self: Jvm, value: string) -> JvmObject,
         create_array: (self: Jvm, element: JvmType, size_or_values: number | { JvmValue }) -> JvmObject,
@@ -163,7 +163,7 @@ export type Jvm = setmetatable<
 
         coerce: (self: Jvm, ...IntoJvmValue) -> ...JvmValue,
 
-        invoke: (self: Jvm, class: JvmClass, method: MethodInfo, args: { JvmValue }) -> JvmValue,
+        invoke: (self: Jvm, method: MethodHandle, args: { JvmValue }) -> JvmValue,
 
         --[=[
 			Executes `main_path`.
@@ -287,13 +287,24 @@ export type JvmClass = setmetatable<
         read super: JvmClass?,
         read interfaces: { JvmClass },
         read loader: JvmClassLoader,
-        read _methods: { [MethodRef]: MethodInfo },
-        read _fields: { [FieldRef]: FieldInfo },
+
+        read public: boolean,
+        read final: boolean,
+        read super_flag: boolean,
+        read interface: boolean,
+        read abstract: boolean,
+        read synthetic: boolean,
+        read annotation: boolean,
+        read enum: boolean,
+
+        read _methods: { MethodInfo },
+        read _fields: { FieldInfo },
         read _classfile: Classfile?,
+        _constant_pool: ConstantPool?,
         read _monitor: Monitor,
         _mirror: JvmObject,
         _state: JvmClassState,
-        read _static_field_values: { [FieldRef]: JvmValue },
+        read _static_field_values: { [FieldHandle]: JvmValue },
     },
     {
         __type: "JvmClass",
@@ -312,6 +323,7 @@ export type JvmClass = setmetatable<
             interfaces: { JvmClass },
             methods: { MethodInfo },
             fields: { FieldInfo },
+            access_flags: number,
             classfile: Classfile?
         ) -> JvmClass,
 
@@ -338,14 +350,12 @@ export type JvmClass = setmetatable<
 			Creates a new Object from this class, dynamically selecting a
 			constructor from given values, if one exists.
 		]=]
-        new: (self: JvmClass, constructor: MethodRef, ...JvmValue) -> JvmObject,
+        new: (self: JvmClass, constructor: MethodHandle, ...JvmValue) -> JvmObject,
 
         inherits_from: (self: JvmClass, other: JvmClass) -> boolean,
         implements: (self: JvmClass, interface: JvmClass) -> boolean,
-        resolve_method: (self: JvmClass, ref: MethodRef) -> MethodInfo?,
-        resolve_field: (self: JvmClass, ref: FieldRef) -> FieldInfo?,
-        get_static_field: (self: JvmClass, field: FieldRef) -> JvmValue,
-        set_static_field: (self: JvmClass, field: FieldRef, value: JvmValue) -> (),
+        get_static_field: (self: JvmClass, field: FieldHandle) -> JvmValue,
+        set_static_field: (self: JvmClass, field: FieldHandle, value: JvmValue) -> (),
         --invoke_static_method: (self: JvmClass, method: MethodRef, ...JvmValue) -> JvmValue,
     }
 >
@@ -364,7 +374,7 @@ export type JvmObject = setmetatable<
         read _monitor: Monitor,
         _magic: _MagicValue?,
         --- The actual field values. An absent value means it's uninitialised.
-        read _field_values: { [FieldRef]: JvmValue },
+        read _field_values: { [FieldHandle]: JvmValue },
     },
     {
         __type: "JvmObject",
@@ -387,8 +397,8 @@ export type JvmObject = setmetatable<
         instance_of: (self: JvmObject, class: JvmClass) -> boolean,
         implements: (self: JvmObject, interface: JvmClass) -> boolean,
 
-        get_field: (self: JvmObject, field: FieldRef) -> JvmValue,
-        set_field: (self: JvmObject, field: FieldRef, value: JvmValue) -> (),
+        get_field: (self: JvmObject, field: FieldHandle) -> JvmValue,
+        set_field: (self: JvmObject, field: FieldHandle, value: JvmValue) -> (),
         --invoke_method: (self: JvmObject, method: MethodRef, ...JvmValue) -> JvmValue,
 
         inner_string: (self: JvmObject) -> string,
@@ -443,12 +453,6 @@ export type FieldInfo = {
     read enum: boolean,
 }
 
---- Unresolved field reference.
-export type FieldRef = {
-    read class: JvmClass, -- todo: switch to class name
-    read name: string, -- todo: switch to signature
-}
-
 --- Resolved field handle.
 export type FieldHandle = {
     read class: JvmClass,
@@ -475,12 +479,6 @@ export type MethodInfo = {
     read abstract: boolean,
     read strictfp: boolean,
     read synthetic: boolean,
-}
-
---- Unresolved method reference.
-export type MethodRef = {
-    read class: JvmClass, -- todo: switch to class name
-    read name: string, -- todo: switch to signature
 }
 
 --- Resolved method handle.

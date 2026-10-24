@@ -31,6 +31,8 @@ local EXCEPTIONS: { [string]: string } = {
 
     IncompatibleClassChangeError = "LinkageError",
     AbstractMethodError = "IncompatibleClassChangeError",
+    NoSuchFieldError = "IncompatibleClassChangeError",
+    NoSuchMethodError = "IncompatibleClassChangeError",
 
     AssertionError = "Error",
 }

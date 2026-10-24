@@ -14,9 +14,8 @@ local function link_native(class_name: string, method_name: string): jvm4l.Nativ
     elseif class_name == "jvm4l/Test" and method_name == "calls_error_wrapper:()V" then
         return function(jvm: jvm4l.Jvm)
             local Test = jvm:resolve_class("jvm4l/Test")
-            local error_wrapper_ref = jvm:get_method_ref(Test, "error_wrapper", "()V")
-            local error_wrapper = Test:resolve_method(error_wrapper_ref) or error("bad")
-            jvm:invoke(Test, error_wrapper, {})
+            local error_wrapper = jvm:resolve_method(Test, "error_wrapper", "()V")
+            jvm:invoke(error_wrapper, {})
             return nil
         end
     end
@@ -46,9 +45,8 @@ local vm = jvm4l.Jvm.new({
 
 local ok, err = pcall(function(...)
     local Test = vm:resolve_class("jvm4l/Test")
-    local test_ref = vm:get_method_ref(Test, "main", "()V")
-    local test_method = Test:resolve_method(test_ref) or error("bad")
-    vm:invoke(Test, test_method, {})
+    local test_ref = vm:resolve_method(Test, "main", "()V")
+    vm:invoke(test_ref, {})
 end)
 if not ok then
     print(`\x1b[31m{err}\x1b[m`)

@@ -1,5 +1,5 @@
+local ConstantPool = require("../ConstantPool")
 local t = require("../t")
-local util = require("../util")
 local JvmObject = require("./JvmObject")
 
 local JvmClass = {}
@@ -22,6 +22,7 @@ function JvmClass._prepare(
     interfaces: { t.JvmClass },
     methods: { t.MethodInfo },
     fields: { t.FieldInfo },
+    access_flags: number,
     classfile: t.Classfile?
 ): t.JvmClass
     local self: t.JvmClass = setmetatable({
@@ -31,53 +32,28 @@ function JvmClass._prepare(
         super = super,
         interfaces = interfaces,
         loader = loader,
-        _methods = {},
-        _fields = {},
+
+        public = bit32.band(access_flags, 0x0001) ~= 0,
+        final = bit32.band(access_flags, 0x0010) ~= 0,
+        super_flag = bit32.band(access_flags, 0x0020) ~= 0,
+        interface = bit32.band(access_flags, 0x0200) ~= 0,
+        abstract = bit32.band(access_flags, 0x0400) ~= 0,
+        synthetic = bit32.band(access_flags, 0x1000) ~= 0,
+        annotation = bit32.band(access_flags, 0x2000) ~= 0,
+        enum = bit32.band(access_flags, 0x4000) ~= 0,
+
+        _methods = methods,
+        _fields = fields,
         _classfile = classfile,
+        _constant_pool = nil,
         _monitor = { held_by = nil, waiting = {} } :: t.Monitor,
         _mirror = (nil :: any) :: t.JvmObject,
         _state = "uninitialised",
         _static_field_values = {},
     }, JvmClass)
 
-    local seen_methods: { [string]: boolean } = {}
-
-    for _, method in methods do
-        local ref = jvm:get_method_ref(self, method.name, method.descriptor)
-
-        self._methods[ref] = method
-        seen_methods[method.signature] = true
-    end
-
-    local current = self.super
-
-    while current do
-        for ref, method in current._methods do
-            if seen_methods[method.signature] then
-                continue
-            end
-
-            self._methods[ref] = method
-            seen_methods[method.signature] = true
-        end
-
-        current = current.super
-    end
-
-    for _, field in fields do
-        local ref = jvm:get_field_ref(self, field.name, field.descriptor)
-
-        self._fields[ref] = field
-    end
-
-    current = self.super
-
-    while current do
-        for ref, field in current._fields do
-            self._fields[ref] = field
-        end
-
-        current = current.super
+    if classfile then
+        self._constant_pool = ConstantPool.new(self)
     end
 
     if name ~= "java/lang/Object" and name ~= "java/lang/Class" then
@@ -116,11 +92,9 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
     -- TODO: interfaces here
     -- TODO: do ConstantValue here
 
-    local clinit_ref = self.jvm:get_method_ref(self, "<clinit>", "()V")
-    local clinit_info = self:resolve_method(clinit_ref)
-    if clinit_info then
-        self.jvm:invoke(self, clinit_info, {}) -- CATCH THIS
-    end
+    -- TODO: check for the existence of <clinit> via reflective methods first!
+    --local clinit_ref = self.jvm:resolve_method(self, "<clinit>", "()V")
+    --self.jvm:invoke(clinit_ref, {}) -- CATCH THIS
 
     self._state = "initialised"
 end
@@ -130,7 +104,7 @@ function JvmClass.new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t.
     return JvmObject._new(self.jvm, self, magic)
 end
 
-function JvmClass.new(self: t.JvmClass, _constructor: t.MethodRef, ...: t.JvmValue): t.JvmObject
+function JvmClass.new(self: t.JvmClass, _constructor: t.MethodHandle, ...: t.JvmValue): t.JvmObject
     local o = self:new_uninitialised()
     -- TODO: Select and call initialiser.
     return o
@@ -164,23 +138,13 @@ function JvmClass.implements(self: t.JvmClass, interface: t.JvmClass): boolean
     return false
 end
 
-function JvmClass.resolve_method(self: t.JvmClass, ref: t.MethodRef): t.MethodInfo?
-    assert(self._state ~= "error")
-    return self._methods[ref]
-end
-
-function JvmClass.resolve_field(self: t.JvmClass, ref: t.FieldRef): t.FieldInfo?
-    assert(self._state ~= "error")
-    return self._fields[ref]
-end
-
-function JvmClass.get_static_field(self: t.JvmClass, field: t.FieldRef): t.JvmValue
+function JvmClass.get_static_field(self: t.JvmClass, field: t.FieldHandle): t.JvmValue
     assert(self._state ~= "error")
     assert(self == field.class or self:inherits_from(field.class))
     return field.class._static_field_values[field]
 end
 
-function JvmClass.set_static_field(self: t.JvmClass, field: t.FieldRef, value: t.JvmValue)
+function JvmClass.set_static_field(self: t.JvmClass, field: t.FieldHandle, value: t.JvmValue)
     assert(self._state ~= "error")
     assert(self == field.class or self:inherits_from(field.class))
     field.class._static_field_values[field] = value

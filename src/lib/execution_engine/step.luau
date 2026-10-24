@@ -2,9 +2,10 @@ local class_parser = require("../class_parser")
 local t = require("../t")
 local frame = require("./frame")
 
-local function invoke_inline(jvm: t.Jvm, class: t.JvmClass, method: t.MethodInfo, args: { t.JvmValue })
-    if method.code.kind == "abstract" then
-        jvm:throw_exception("java/lang/AbstractMethodError", method.descriptor)
+local function invoke_inline(jvm: t.Jvm, method: t.MethodHandle, args: { t.JvmValue })
+    local method_info = method.method_info
+    if method_info.code.kind == "abstract" then
+        jvm:throw_exception("java/lang/AbstractMethodError", method_info.descriptor)
         error("^")
     end
 
@@ -19,38 +20,11 @@ local function invoke_inline(jvm: t.Jvm, class: t.JvmClass, method: t.MethodInfo
         error("^")
     end
 
-    frame.push_on(jvm, thread, class, method, nil, args)
+    frame.push_on(jvm, thread, method, nil, args)
 end
 
 local function read_u16be(b: buffer, offset: number): number
     return bit32.rshift(bit32.byteswap(buffer.readu16(b, offset)), 16)
-end
-
-local function get_method_ref_from_k(jvm: t.Jvm, classfile: t.Classfile, idx: number): (t.JvmClass, t.MethodRef)
-    local k = classfile.constant_pool
-    local methodref = k[idx]
-    if methodref.tag ~= "Methodref" then
-        error("expected Methodref")
-    end
-
-    local classref = k[methodref.class_index]
-    if classref.tag ~= "Class" then
-        error("expected Class")
-    end
-
-    local name_and_type = k[methodref.name_and_type_index]
-    if name_and_type.tag ~= "NameAndType" then
-        error("expected NameAndType")
-    end
-
-    local class_name, name, descriptor =
-        class_parser.class_name(classfile, classref),
-        class_parser.utf8_value(classfile, name_and_type.name_index),
-        class_parser.utf8_value(classfile, name_and_type.descriptor_index)
-
-    local class = jvm:resolve_class(class_name)
-    local method_ref = jvm:get_method_ref(class, name, descriptor)
-    return class, method_ref
 end
 
 local LONG_SLOT_MARKER = newproxy(false)
@@ -133,7 +107,7 @@ local function step(jvm: t.Jvm)
     local stack = f.stack
     local locals = f.locals
     local classfile = f.class._classfile or error("expected classfile")
-    local k = classfile.constant_pool
+    local k = f.class._constant_pool or error("expected constant pool")
 
     local start_pc = f.pc
     f.start_pc = start_pc
@@ -169,15 +143,14 @@ local function step(jvm: t.Jvm)
         local idx = read_u16be(code, f.pc)
         f.pc += 2
 
-        local class, method_ref = get_method_ref_from_k(jvm, classfile, idx)
-        local method_info = class:resolve_method(method_ref) or error("unable to resolve method")
-        local arg_count = #method_info.type:get().arguments
+        local method = k:get(idx, "method")
+        local arg_count = #method.method_info.type:get().arguments
         local args: { any } = table.create(arg_count)
         for i = 1, arg_count do
             local v = pop(f, "any")
             table.insert(args, 1, v)
         end
-        invoke_inline(jvm, class, method_info, args)
+        invoke_inline(jvm, method, args)
     elseif op == 0xAC then -- ireturn
         frame.return_from_current_frame(thread, 1, pop(f, "1"))
     elseif op == 0xB1 then -- return
