@@ -44,9 +44,13 @@ local vm = jvm4l.Jvm.new({
 --print(vm:resolve_class("jvm4l/Luau"))
 
 local ok, err = pcall(function(...)
-    local Test = vm:resolve_class("jvm4l/Test")
-    local test_ref = vm:resolve_method(Test, "main", "()V")
-    vm:invoke(test_ref, {})
+    local Globals = vm:resolve_class("jvm4l/luau/Globals")
+    local constructor = vm:resolve_method(Globals, "<init>", "()V")
+    Globals:new(constructor, {})
+
+    --local Test = vm:resolve_class("jvm4l/Test")
+    --local test_ref = vm:resolve_method(Test, "main", "()V")
+    --vm:invoke(test_ref, {})
 end)
 if not ok then
     print(`\x1b[31m{err}\x1b[m`)

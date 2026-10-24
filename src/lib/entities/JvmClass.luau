@@ -104,9 +104,11 @@ function JvmClass._new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t
     return JvmObject._new(self.jvm, self, magic)
 end
 
-function JvmClass.new(self: t.JvmClass, _constructor: t.MethodHandle, ...: t.JvmValue): t.JvmObject
+function JvmClass.new(self: t.JvmClass, constructor: t.MethodHandle, args: { t.JvmValue }): t.JvmObject
     local o = self:_new_uninitialised()
-    -- TODO: Select and call initialiser.
+    local args = table.clone(args)
+    table.insert(args, 1, o)
+    self.jvm:invoke(constructor, args)
     return o
 end
 
