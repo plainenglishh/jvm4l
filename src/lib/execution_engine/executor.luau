@@ -108,9 +108,7 @@ local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
     jvm:_trace(
         `exited execution engine #{jvm._exec_depth} {if target_ok then "" else "un"}successfully with {if target_ok
             then "value"
-            else "exception (hashcode)"} {if not target_ok
-            then (target_value :: any).hash_code
-            else target_value}`
+            else "exception"} {if not target_ok then (target_value :: any).class.fqcn else target_value}`
     )
     jvm._exec_depth -= 1
     return target_ok, target_value
