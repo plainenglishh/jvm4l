@@ -1,6 +1,10 @@
 local t = require("../t")
 local util = require("../util")
+
 export type DispatchType = "static" | "special" | "virtual" | "interface" | "dynamic"
+export type DispatchedMethod = {
+    read method: t.MethodHandle,
+}
 
 local function assert_not_abstract(jvm: t.Jvm, method: t.MethodInfo)
     if method.abstract then
@@ -19,7 +23,7 @@ function dispatcher.dispatch(
     type: DispatchType,
     executing_class: t.JvmClass,
     executing_object: t.JvmObject?
-): t.MethodHandle
+): DispatchedMethod
     local dispatched_method: t.MethodHandle
 
     if type == "static" then
@@ -100,7 +104,9 @@ function dispatcher.dispatch(
     end
 
     assert_not_abstract(jvm, dispatched_method.info)
-    return dispatched_method
+    return table.freeze({
+        method = method,
+    })
 end
 
 return dispatcher

@@ -41,7 +41,7 @@ function frame.push_on(
         end
 
         frame = {
-            method = method,
+            method = method_info,
             class = class,
             loader = class.loader,
             code = method_info.code,
@@ -54,7 +54,7 @@ function frame.push_on(
         } :: t.StackFrame
     elseif method_info.code.kind == "luau" then
         frame = {
-            method = method,
+            method = method_info,
             class = class,
             loader = class.loader,
             code = method_info.code,

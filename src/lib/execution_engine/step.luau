@@ -6,7 +6,7 @@ local frame = require("./frame")
     Invokes `method` inline without performing dispatch logic.
     You must call `dispatcher.dispatch` before this to get the correct method, regardless of dispatch type.
 ]=]
-local function invoke_inline(jvm: t.Jvm, method: t.MethodHandle, args: { t.JvmValue })
+local function invoke_inline(jvm: t.Jvm, method: dispatcher.DispatchedMethod, args: { t.JvmValue })
     local thread = jvm.current_thread
     local stack = thread.stack
     local this_frame = stack[#stack]
@@ -18,7 +18,7 @@ local function invoke_inline(jvm: t.Jvm, method: t.MethodHandle, args: { t.JvmVa
         error("^")
     end
 
-    frame.push_on(jvm, thread, method, nil, args)
+    frame.push_on(jvm, thread, method.method, nil, args)
 end
 
 local function read_u16be(b: buffer, offset: number): number
