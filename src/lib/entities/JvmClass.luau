@@ -70,6 +70,7 @@ function JvmClass._prepare(
 end
 
 function JvmClass._ensure_initialised(self: t.JvmClass)
+    -- TODO: hold the monitor during initialisation, and allow reentrancy
     if self._state == "initialised" then
         return
     elseif self._state == "initialising" then
@@ -93,9 +94,11 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
     -- TODO: interfaces here
     -- TODO: do ConstantValue here
 
-    -- TODO: check for the existence of <clinit> via reflective methods first!
-    --local clinit_ref = self.jvm:resolve_method(self, "<clinit>", "()V")
-    --self.jvm:invoke(clinit_ref, {}) -- CATCH THIS
+    if self:get_method("<clinit>", "()V") then
+        local clinit = self.jvm:resolve_method(self, "<clinit>", "()V")
+        local dispatched_clinit = execution_engine.dispatch(self.jvm, clinit, "static", self)
+        execution_engine.invoke_sync(self.jvm, dispatched_clinit, {})
+    end
 
     self._state = "initialised"
 end
