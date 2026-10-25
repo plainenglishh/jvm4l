@@ -4,20 +4,25 @@
 
 ## Short Term Goals
 
+- [ ] threading:
+    - [ ] current_thread no longer always set, create ephemeral thread for host side :invoke if none are set
+    - [ ] ability to create new threads with runnable targets/main class
+    - [ ] proper scheduling
+    - [ ] monitorenter/exit
+- [ ] type/access check on frame push
 - [ ] reflection methods on JvmClass.
+- [ ] TESTING!!
 - [X] important!: clarify class lifecycle. when classes are loaded, initialised, etc, and when to resolve symbolic references (jvmtype is currently a live reference, should it be symbolic?)
 - [X] lazily loaded constant pool (backed by the classfile)
-- [ ] TESTING!!
 - [X] consider 'unflattening' method/field tables
 - [X] transition to invocation to MethodHandle/FieldHandle, and introduce method dispatch seperately in exec engine
-- [ ] move jvm:invoke into JvmClass:invoke_static() and JvmObject:invoke()
+- [X] move jvm:invoke into JvmClass:invoke_static() and JvmObject:invoke()
 - [X] Descriptor to `JvmType`
 - [X] Exceptions (simply the objects themselves, rather than catching)
 - [X] Field value get/set
 - [x] Field/Method resolution
 - [X] Threads
 - [X] Method calling & execution engine
-- [ ] Typechecking and access checking the above
 - [X] Strings
 - [X] Arrays
 

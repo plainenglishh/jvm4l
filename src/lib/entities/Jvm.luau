@@ -1,6 +1,5 @@
 local class_parser = require("../class_parser")
 local jvm_type = require("../jvm_type")
-local execution_engine = require("../execution_engine")
 local jcl_classfiles = require("../jcl_classfiles")
 local native_methods = require("../native_methods")
 local t = require("../t")

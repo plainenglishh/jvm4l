@@ -1,6 +1,5 @@
 local class_parser = require("./class_parser")
 local t = require("./t")
-local util = require("./util")
 
 local ConstantPool = {}
 ConstantPool.__index = ConstantPool
