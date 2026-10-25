@@ -138,6 +138,7 @@ export type Jvm = setmetatable<
         define_class: (self: Jvm, classfile: buffer, defining_loader: JvmClassLoader) -> JvmClass,
 
         resolve_field: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> FieldHandle,
+        _create_method_handle: (self: Jvm, class: JvmClass, method_info: MethodInfo) -> MethodHandle,
         resolve_method: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> MethodHandle,
 
         create_string: (self: Jvm, value: string) -> JvmObject,
@@ -162,8 +163,6 @@ export type Jvm = setmetatable<
         internal_error: (self: Jvm, message: string, level: number?) -> never,
 
         coerce: (self: Jvm, ...IntoJvmValue) -> ...JvmValue,
-
-        invoke: (self: Jvm, method: MethodHandle, args: { JvmValue }) -> JvmValue,
 
         --[=[
 			Executes `main_path`.
@@ -356,7 +355,11 @@ export type JvmClass = setmetatable<
         implements: (self: JvmClass, interface: JvmClass) -> boolean,
         get_static_field: (self: JvmClass, field: FieldHandle) -> JvmValue,
         set_static_field: (self: JvmClass, field: FieldHandle, value: JvmValue) -> (),
-        --invoke_static_method: (self: JvmClass, method: MethodRef, ...JvmValue) -> JvmValue,
+        invoke_static: (self: JvmClass, method: MethodHandle, args: { JvmValue }) -> JvmValue,
+
+        -- Reflection
+
+        get_method: (self: JvmClass, name: string, descriptor: string) -> MethodInfo?,
     }
 >
 
@@ -484,7 +487,7 @@ export type MethodInfo = {
 --- Resolved method handle.
 export type MethodHandle = {
     read class: JvmClass,
-    read method_info: MethodInfo,
+    read info: MethodInfo,
 }
 
 --[=[

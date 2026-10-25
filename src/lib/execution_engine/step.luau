@@ -1,14 +1,12 @@
-local class_parser = require("../class_parser")
 local t = require("../t")
+local dispatcher = require("./dispatcher")
 local frame = require("./frame")
 
+--[=[
+    Invokes `method` inline without performing dispatch logic.
+    You must call `dispatcher.dispatch` before this to get the correct method, regardless of dispatch type.
+]=]
 local function invoke_inline(jvm: t.Jvm, method: t.MethodHandle, args: { t.JvmValue })
-    local method_info = method.method_info
-    if method_info.code.kind == "abstract" then
-        jvm:throw_exception("java/lang/AbstractMethodError", method_info.descriptor)
-        error("^")
-    end
-
     local thread = jvm.current_thread
     local stack = thread.stack
     local this_frame = stack[#stack]
@@ -106,7 +104,7 @@ local function step(jvm: t.Jvm)
     local code = f.code.code
     local stack = f.stack
     local locals = f.locals
-    local classfile = f.class._classfile or error("expected classfile")
+    local class = f.class
     local k = f.class._constant_pool or error("expected constant pool")
 
     local start_pc = f.pc
@@ -144,13 +142,14 @@ local function step(jvm: t.Jvm)
         f.pc += 2
 
         local method = k:get(idx, "method")
-        local arg_count = #method.method_info.type:get().arguments
+        local arg_count = #method.info.type:get().arguments
         local args: { any } = table.create(arg_count)
         for i = 1, arg_count do
             local v = pop(f, "any")
             table.insert(args, 1, v)
         end
-        invoke_inline(jvm, method, args)
+        local dispatched_method = dispatcher.dispatch(jvm, method, "static", class)
+        invoke_inline(jvm, dispatched_method, args)
     elseif op == 0xAC then -- ireturn
         frame.return_from_current_frame(thread, 1, pop(f, "1"))
     elseif op == 0xB1 then -- return

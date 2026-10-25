@@ -1,6 +1,6 @@
 local class_parser = require("../class_parser")
 local jvm_type = require("../jvm_type")
-local execution = require("../execution_engine")
+local execution_engine = require("../execution_engine")
 local jcl_classfiles = require("../jcl_classfiles")
 local native_methods = require("../native_methods")
 local t = require("../t")
@@ -504,11 +504,16 @@ end
 local function create_interned_method_handle(class: t.JvmClass, method_info: t.MethodInfo): t.MethodHandle
     local handle: t.MethodHandle = table.freeze({
         class = class,
-        method_info = method_info,
+        info = method_info,
     })
 
     set_interned_method(class.jvm, class, method_info.name, method_info.descriptor, handle)
     return handle
+end
+
+function Jvm._create_method_handle(self: t.Jvm, class: t.JvmClass, method_info: t.MethodInfo): t.MethodHandle
+    return get_interned_method(self, class, method_info.name, method_info.descriptor)
+        or create_interned_method_handle(class, method_info)
 end
 
 function Jvm.resolve_method(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.MethodHandle
@@ -659,16 +664,6 @@ function Jvm.coerce(self: t.Jvm, ...: t.IntoJvmValue): ...t.JvmValue
     end
 
     return unpack(values)
-end
-
-function Jvm.invoke(self: t.Jvm, method: t.MethodHandle, args: { t.JvmValue }): t.JvmValue
-    local ret = { execution.invoke_sync(self, method, args) }
-    local ok = table.remove(ret, 1)
-    if not ok then
-        error(table.remove(ret, 1), 0)
-    end
-
-    return table.remove(ret, 1) :: t.JvmValue
 end
 
 function Jvm.run(self: t.Jvm, main_path: string, args: { t.JvmValue })

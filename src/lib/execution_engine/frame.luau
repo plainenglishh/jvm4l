@@ -11,7 +11,7 @@ function frame.push_on(
     args: { t.JvmValue }
 )
     local frame: t.StackFrame
-    local method_info = method.method_info
+    local method_info = method.info
     local class = method.class
 
     if method_info.code.kind == "java" then

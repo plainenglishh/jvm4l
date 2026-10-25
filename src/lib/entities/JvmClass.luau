@@ -1,4 +1,5 @@
 local ConstantPool = require("../ConstantPool")
+local execution_engine = require("../execution_engine")
 local t = require("../t")
 local JvmObject = require("./JvmObject")
 
@@ -108,7 +109,8 @@ function JvmClass.new(self: t.JvmClass, constructor: t.MethodHandle, args: { t.J
     local o = self:_new_uninitialised()
     local args = table.clone(args)
     table.insert(args, 1, o)
-    self.jvm:invoke(constructor, args)
+    local dispatched_constructor = execution_engine.dispatch(self.jvm, constructor, "special", self)
+    execution_engine.invoke_sync(self.jvm, dispatched_constructor, args)
     return o
 end
 
@@ -150,6 +152,21 @@ function JvmClass.set_static_field(self: t.JvmClass, field: t.FieldHandle, value
     assert(self._state ~= "error")
     assert(self == field.class or self:inherits_from(field.class))
     field.class._static_field_values[field] = value
+end
+
+function JvmClass.invoke_static(self: t.JvmClass, method: t.MethodHandle, args: { t.JvmValue }): t.JvmValue
+    local dispatched_method = execution_engine.dispatch(self.jvm, method, "static", self)
+    return execution_engine.invoke_sync(self.jvm, dispatched_method, args)
+end
+
+function JvmClass.get_method(self: t.JvmClass, name: string, descriptor: string): t.MethodInfo?
+    for _, method in self._methods do
+        if method.name == name and method.descriptor == descriptor then
+            return method
+        end
+    end
+
+    return nil
 end
 
 table.freeze(JvmClass)

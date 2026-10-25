@@ -1,47 +1,45 @@
 --!native
 
+local dispatcher = require("@self/dispatcher")
 local executor = require("@self/executor")
 local frames = require("@self/frame")
 local t = require("./t")
 
+export type DispatchType = dispatcher.DispatchType
+
 local execution_engine = {}
 
---[=[
-    Begins synchronous execution on the given method.
-]=]
-function execution_engine.invoke_on_sync(
+function execution_engine.dispatch(
     jvm: t.Jvm,
-    thread: t.Thread,
     method: t.MethodHandle,
-    args: { t.JvmValue }
-): (boolean, ...t.JvmValue)
-    local method_info = method.method_info
-    if method_info.code.kind == "abstract" then
-        jvm:throw_exception("java/lang/AbstractMethodError", method_info.descriptor)
-        error("^")
-    end
+    type: DispatchType,
+    executing_class: t.JvmClass,
+    executing_object: t.JvmObject?
+): t.MethodHandle
+    return dispatcher.dispatch(jvm, method, type, executing_class, executing_object)
+end
 
+--[=[
+    Invokes `method` synchronously without performing dispatch logic.
+    You must call `execution_engine.dispatch` before this to get the correct method, regardless of dispatch type.
+]=]
+function execution_engine.invoke_sync(jvm: t.Jvm, method: t.MethodHandle, args: { t.JvmValue }): t.JvmValue
+    local thread = jvm.current_thread
     local stack = thread.stack
     local this_frame = stack[#stack]
     if this_frame and this_frame.code.kind == "java" then
-        jvm:throw_exception(
-            "java/lang/InternalError",
-            "attempt to use invoke_on_sync in Java context, use invoke_inline"
-        )
+        jvm:internal_error("attempt to use `execution_engine.invoke_sync` in Java context, use invoke_inline")
         error("^")
     end
 
     local invocation: t.Invocation = { state = "running" }
     frames.push_on(jvm, thread, method, invocation, args)
-    return executor(jvm, invocation)
-end
+    local ok, value_or_error = executor(jvm, invocation)
+    if not ok then
+        error(value_or_error)
+    end
 
-function execution_engine.invoke_sync(
-    jvm: t.Jvm,
-    method: t.MethodHandle,
-    args: { t.JvmValue }
-): (boolean, ...t.JvmValue)
-    return execution_engine.invoke_on_sync(jvm, jvm.current_thread, method, args)
+    return value_or_error
 end
 
 return execution_engine

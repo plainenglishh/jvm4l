@@ -15,7 +15,7 @@ local function link_native(class_name: string, method_name: string): jvm4l.Nativ
         return function(jvm: jvm4l.Jvm)
             local Test = jvm:resolve_class("jvm4l/Test")
             local error_wrapper = jvm:resolve_method(Test, "error_wrapper", "()V")
-            jvm:invoke(error_wrapper, {})
+            Test:invoke_static(error_wrapper, {})
             return nil
         end
     end
@@ -44,13 +44,9 @@ local vm = jvm4l.Jvm.new({
 --print(vm:resolve_class("jvm4l/Luau"))
 
 local ok, err = pcall(function(...)
-    local Globals = vm:resolve_class("jvm4l/luau/Globals")
-    local constructor = vm:resolve_method(Globals, "<init>", "()V")
-    Globals:new(constructor, {})
-
-    --local Test = vm:resolve_class("jvm4l/Test")
-    --local test_ref = vm:resolve_method(Test, "main", "()V")
-    --vm:invoke(test_ref, {})
+    local Test = vm:resolve_class("jvm4l/Test")
+    local test_ref = vm:resolve_method(Test, "main", "()V")
+    Test:invoke_static(test_ref, {})
 end)
 if not ok then
     print(`\x1b[31m{err}\x1b[m`)

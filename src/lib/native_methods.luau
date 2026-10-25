@@ -35,7 +35,7 @@ native_methods["java/lang/Throwable"] = {
         for i = 1, stack_depth - 1 do
             local frame = magic.stack[i]
 
-            local elem = StackTraceElement:new_uninitialised()
+            local elem = StackTraceElement:_new_uninitialised()
             elem:set_field(declaring_class_ref, jvm:create_string(frame.class.name))
             elem:set_field(method_name_ref, jvm:create_string(frame.method.name))
 
