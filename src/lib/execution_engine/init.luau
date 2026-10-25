@@ -6,7 +6,7 @@ local frames = require("@self/frame")
 local t = require("./t")
 
 export type DispatchType = dispatcher.DispatchType
-export type DispatchedMethod = dispatcher.DispatchedMethod
+export type DispatchedMethodHandle = dispatcher.DispatchedMethodHandle
 
 local execution_engine = {}
 
@@ -16,7 +16,7 @@ function execution_engine.dispatch(
     type: DispatchType,
     executing_class: t.JvmClass,
     executing_object: t.JvmObject?
-): DispatchedMethod
+): DispatchedMethodHandle
     return dispatcher.dispatch(jvm, method, type, executing_class, executing_object)
 end
 
@@ -24,7 +24,7 @@ end
     Invokes `method` synchronously without performing dispatch logic.
     You must call `execution_engine.dispatch` before this to get the correct method, regardless of dispatch type.
 ]=]
-function execution_engine.invoke_sync(jvm: t.Jvm, method: DispatchedMethod, args: { t.JvmValue }): t.JvmValue
+function execution_engine.invoke_sync(jvm: t.Jvm, method: DispatchedMethodHandle, args: { t.JvmValue }): t.JvmValue
     local thread = jvm.current_thread
     local stack = thread.stack
     local this_frame = stack[#stack]

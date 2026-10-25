@@ -2,7 +2,7 @@ local t = require("../t")
 local util = require("../util")
 
 export type DispatchType = "static" | "special" | "virtual" | "interface" | "dynamic"
-export type DispatchedMethod = {
+export type DispatchedMethodHandle = {
     read method: t.MethodHandle,
 }
 
@@ -23,7 +23,7 @@ function dispatcher.dispatch(
     type: DispatchType,
     executing_class: t.JvmClass,
     executing_object: t.JvmObject?
-): DispatchedMethod
+): DispatchedMethodHandle
     local dispatched_method: t.MethodHandle
 
     if type == "static" then
