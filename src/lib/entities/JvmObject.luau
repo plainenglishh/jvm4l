@@ -27,7 +27,6 @@ JvmObject.__index = JvmObject
 function JvmObject.__tostring(self: t.JvmObject): string
     local bits = bit32.band(self.hash_code, 0xFFFFFFFF)
     return string.format("<JvmObject: %s@%08x>", self.class.fqcn, bits)
-    
 end
 
 function JvmObject.__display(self: t.JvmObject): string
