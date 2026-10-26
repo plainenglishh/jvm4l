@@ -182,7 +182,7 @@ local function coerce_error(jvm: t.Jvm, e: unknown, invoke_depth: number): t.Jvm
     end
 
     local traceback = luau_traceback(3, invoke_depth)
-    return jvm:create_exception("jvm4l/luau/LuauError", `{message}\n{traceback}`, nil, true)
+    return jvm:create_exception("jvm4l/luau/LuauError", `{message}\n{traceback}`, nil, false)
 end
 
 --[=[ 
