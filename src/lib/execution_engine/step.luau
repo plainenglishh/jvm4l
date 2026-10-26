@@ -125,6 +125,66 @@ local function is_throwable(value: unknown): boolean
     return value:instance_of(value.jvm._classes.bootstrap["java/lang/Throwable"])
 end
 
+local function luau_stack_depth(start_level: number?): number
+    local i = start_level or 1
+    while debug.info(i, "f") do
+        i += 1
+    end
+    return i - 1
+end
+
+local function luau_traceback(start_level: number, target_depth: number): string
+    local current_depth = luau_stack_depth()
+    local start_frame = start_level + 1
+    local stop_frame = current_depth - target_depth
+
+    if stop_frame < start_frame then
+        stop_frame = current_depth
+    end
+
+    local out = {}
+
+    for i = start_frame, stop_frame do
+        local s, l, n = debug.info(i, "sln")
+        if not s then
+            break
+        end
+        if l == -1 then
+            continue
+        end
+
+        if n ~= "" then
+            n = ` function {n}`
+        end
+
+        table.insert(out, `    {s}:{l}{n}`)
+    end
+
+    return table.concat(out, "\n")
+end
+
+local function coerce_error(jvm: t.Jvm, e: unknown, invoke_depth: number): t.JvmObject
+    if is_throwable(e) then
+        return e :: t.JvmObject
+    end
+
+    local message: string
+    if type(e) == "table" and getmetatable(e) == JvmObject then
+        local value = e :: t.JvmObject
+
+        if value:instance_of(value.jvm._classes.bootstrap["java/lang/String"]) then
+            message = value:inner_string()
+        else
+            message = tostring(value)
+        end
+    else
+        message = tostring(e)
+    end
+
+    local traceback = luau_traceback(3, invoke_depth)
+    return jvm:create_exception("jvm4l/luau/LuauError", `{message}\n{traceback}`, nil, true)
+end
+
 --[=[ 
     Execute a single VM step (a native call, or a single bytecode instruction)
 
@@ -139,31 +199,9 @@ local function step(jvm: t.Jvm)
     local method = f.method
 
     if f.code.kind == "luau" then
+        local depth = luau_stack_depth()
         local ok, value = xpcall(f.code.closure, function(e: any)
-            if is_throwable(e) then
-                return e :: t.JvmObject
-            end
-
-            local message: string
-            if type(e) == "table" and getmetatable(e) == JvmObject then
-                local value = e :: t.JvmObject
-
-                if value:instance_of(value.jvm._classes.bootstrap["java/lang/String"]) then
-                    message = value:inner_string()
-                else
-                    message = tostring(value)
-                end
-            else
-                message = tostring(e)
-            end
-
-            local traceback = debug.traceback("", 2)
-            return jvm:create_exception(
-                "jvm4l/luau/LuauError",
-                message .. "    " .. traceback:gsub("\n", "\n    "),
-                nil,
-                true
-            )
+            return coerce_error(jvm, e, depth)
         end, jvm, unpack(f.args))
 
         if not ok then
