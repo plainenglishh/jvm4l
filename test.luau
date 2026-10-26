@@ -27,8 +27,8 @@ local epoch = os.clock()
 local vm = jvm4l.Jvm.new({
     link_native = link_native,
     trace = function(message: string)
-        local time = os.clock() - epoch
-        print(`\x1b[2m[jvm4l @ {math.round(time * 100000) / 100000}] {message}\x1b[0m`)
+        local time_ms = (os.clock() - epoch) * 1000
+        print(string.format("\x1b[2m[jvm4l @ %.3fms] %s\x1b[0m", time_ms, message))
     end,
 })
 
