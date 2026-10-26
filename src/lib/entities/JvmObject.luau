@@ -1,4 +1,5 @@
-local t = require("../t")
+local execution_engine = require("../execution_engine")
+local t = require("../t") 
 local typechecker = require("../typechecker")
 local util = require("../util") 
 
@@ -84,6 +85,13 @@ function JvmObject.set_field(self: t.JvmObject, field: t.FieldHandle, value: t.J
         self.jvm:throw_exception("java/lang/IllegalArgumentException")
     end
     self._field_values[field] = value
+end
+
+function JvmObject.invoke(self: t.JvmObject, method: t.MethodHandle, args: {t.JvmValue}): t.JvmValue
+    local args = table.clone(args)
+    table.insert(args, 1, self)
+    local dispatched_method = execution_engine.dispatch(self.jvm, method, "virtual", self.class, self)
+    return execution_engine.invoke_sync(self.jvm, dispatched_method, args)
 end
 
 function JvmObject.inner_string(self: t.JvmObject): string

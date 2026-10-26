@@ -1,5 +1,5 @@
-local JvmObject = require("../entities/JvmObject")
 local t = require("../t")
+local util = require("../util")
 local dispatcher = require("./dispatcher")
 local frame = require("./frame")
 
@@ -113,11 +113,7 @@ local function supports_wide(op: number): boolean
 end
 
 local function is_throwable(value: unknown): boolean
-    if type(value) ~= "table" then
-        return false
-    end
-
-    if getmetatable(value) ~= JvmObject then
+    if not util.is_object(value) then
         return false
     end
 
@@ -169,7 +165,7 @@ local function coerce_error(jvm: t.Jvm, e: unknown, invoke_depth: number): t.Jvm
     end
 
     local message: string
-    if type(e) == "table" and getmetatable(e) == JvmObject then
+    if util.is_object(e) then
         local value = e :: t.JvmObject
 
         if value:instance_of(value.jvm._classes.bootstrap["java/lang/String"]) then

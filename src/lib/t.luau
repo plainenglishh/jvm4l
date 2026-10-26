@@ -405,7 +405,7 @@ export type JvmObject = setmetatable<
 
         get_field: (self: JvmObject, field: FieldHandle) -> JvmValue,
         set_field: (self: JvmObject, field: FieldHandle, value: JvmValue) -> (),
-        --invoke_method: (self: JvmObject, method: MethodRef, ...JvmValue) -> JvmValue,
+        invoke: (self: JvmObject, method: MethodHandle, { JvmValue }) -> JvmValue,
 
         inner_string: (self: JvmObject) -> string,
         inner_thread: (self: JvmObject) -> Thread,

@@ -1,16 +1,12 @@
 local dbg = require("../dbg")
-local JvmObject = require("../entities/JvmObject")
 local t = require("../t")
+local util = require("../util")
 local frame = require("./frame")
 local scheduler = require("./scheduler")
 local step = require("./step")
 
 local function is_throwable(value: unknown): boolean
-    if type(value) ~= "table" then
-        return false
-    end
-
-    if getmetatable(value) ~= JvmObject then
+    if not util.is_object(value) then
         return false
     end
 

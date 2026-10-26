@@ -3,7 +3,7 @@ local t = require("./t")
 local native_methods: { [string]: { [string]: t.NativeMethod } } = {}
 
 native_methods["java/lang/Object"] = {
-    ["hashCode:()I"] = function(_jvm: t.Jvm, this: t.JvmObject)
+    ["hashCode:()I"] = function(_jvm: t.Jvm, this: t.JvmObject): number
         return this.hash_code
     end,
 }
