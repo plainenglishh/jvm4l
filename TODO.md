@@ -4,12 +4,13 @@
 
 ## Short Term Goals
 
+- [ ] move some work (e.g. resolution) out of `Jvm`. it shouldnt be a god class!
 - [ ] threading:
     - [X] current_thread no longer always set, create ephemeral thread for host side :invoke if none are set
     - [ ] ability to create new threads with runnable targets/main class
     - [ ] proper scheduling
     - [ ] monitorenter/exit
-- [ ] type/access check on frame push
+- [x] type/access check on frame push
 - [ ] reflection methods on JvmClass.
 - [ ] TESTING!!
 - [X] important!: clarify class lifecycle. when classes are loaded, initialised, etc, and when to resolve symbolic references (jvmtype is currently a live reference, should it be symbolic?)
