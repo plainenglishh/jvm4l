@@ -85,7 +85,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
         return `non-throwable exception: {exception:__tostring()}`
     end
 
-    local message_ref = jvm:resolve_field(Throwable, "message", "Ljava/lang/String;")
+    local message_ref = Throwable:resolve_field("message", "Ljava/lang/String;")
     local message = exception:get_field(message_ref) :: t.JvmObjectRef
     local message_str = ""
     if message then
@@ -127,7 +127,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
         stack_trace = "\n" .. table.concat(builder, "\n")
     end
 
-    local cause = exception:get_field(jvm:resolve_field(Throwable, "cause", "Ljava/lang/Throwable;"))
+    local cause = exception:get_field(Throwable:resolve_field("cause", "Ljava/lang/Throwable;"))
     local cause_str = ""
     if cause then
         cause_str = "\nCaused by: " .. jvm4l.display_exception(cause :: t.JvmObject)

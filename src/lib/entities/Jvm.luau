@@ -371,8 +371,8 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
     return class
 end
 
-local function get_interned_field(jvm: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.FieldHandle?
-    local by_class = jvm._interned_field_handles[class]
+function Jvm._get_interned_method(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.MethodHandle?
+    local by_class = self._interned_method_handles[class]
     if not by_class then
         return nil
     end
@@ -385,86 +385,36 @@ local function get_interned_field(jvm: t.Jvm, class: t.JvmClass, name: string, d
     return by_name[descriptor]
 end
 
-local function set_interned_field(jvm: t.Jvm, class: t.JvmClass, name: string, descriptor: string, field: t.FieldHandle)
-    local by_class = jvm._interned_field_handles[class]
-    if not by_class then
-        by_class = {}
-        jvm._interned_field_handles[class] = by_class
+function Jvm._create_interned_field(self: t.Jvm, class: t.JvmClass, field_info: t.FieldInfo): t.FieldHandle
+    local interned = self:_get_interned_field(class, field_info.name, field_info.descriptor)
+    if interned then
+        return interned
     end
 
-    local by_name = by_class[name]
-    if not by_name then
-        by_name = {}
-        by_class[name] = by_name
-    end
-
-    by_name[descriptor] = field
-end
-
-local function create_interned_field_handle(class: t.JvmClass, field_info: t.FieldInfo): t.FieldHandle
     local handle: t.FieldHandle = table.freeze({
         class = class,
-        field_info = field_info,
+        info = field_info,
     })
 
-    set_interned_field(class.jvm, class, field_info.name, field_info.descriptor, handle)
+    local by_class = self._interned_field_handles[class]
+    if not by_class then
+        by_class = {}
+        self._interned_field_handles[class] = by_class
+    end
+
+    local by_name = by_class[field_info.name]
+    if not by_name then
+        by_name = {}
+        by_class[field_info.name] = by_name
+    end
+
+    by_name[field_info.descriptor] = handle
+
     return handle
 end
 
-function Jvm.resolve_field(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.FieldHandle
-    local interned_field = get_interned_field(self, class, name, descriptor)
-    if interned_field then
-        return interned_field
-    end
-
-    for _, field in class._fields do
-        if field.name == name and field.descriptor == descriptor then
-            -- CHECK ACCESS
-            return create_interned_field_handle(class, field)
-        end
-    end
-
-    local function deep_search_field(class_or_interface: t.JvmClass): (t.JvmClass?, t.FieldInfo?)
-        for _, field in class_or_interface._fields do
-            if field.name == name and field.descriptor == descriptor then
-                return class_or_interface, field
-            end
-        end
-
-        for _, interface in class_or_interface.interfaces do
-            local found_class, found_field = deep_search_field(interface)
-            if found_class and found_field then
-                return found_class, found_field
-            end
-        end
-
-        return nil, nil
-    end
-
-    for _, interface in class.interfaces do
-        local found_class, found_field = deep_search_field(interface)
-        if found_class and found_field then
-            -- CHECK ACCESS
-            return create_interned_field_handle(found_class, found_field)
-        end
-    end
-
-    local current = class.super
-    while current do
-        for _, field in current._fields do
-            if field.name == name and field.descriptor == descriptor then
-                -- CHECK ACCESS
-                return create_interned_field_handle(current, field)
-            end
-        end
-        current = current.super
-    end
-
-    return self:throw_exception("java/lang/NoSuchFieldError", `{class.fqcn} has no field {name}:{descriptor}`)
-end
-
-local function get_interned_method(jvm: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.MethodHandle?
-    local by_class = jvm._interned_method_handles[class]
+function Jvm._get_interned_field(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.FieldHandle?
+    local by_class = self._interned_field_handles[class]
     if not by_class then
         return nil
     end
@@ -477,93 +427,32 @@ local function get_interned_method(jvm: t.Jvm, class: t.JvmClass, name: string, 
     return by_name[descriptor]
 end
 
-local function set_interned_method(
-    jvm: t.Jvm,
-    class: t.JvmClass,
-    name: string,
-    descriptor: string,
-    field: t.MethodHandle
-)
-    local by_class = jvm._interned_method_handles[class]
-    if not by_class then
-        by_class = {}
-        jvm._interned_field_handles[class] = by_class
+function Jvm._create_interned_method(self: t.Jvm, class: t.JvmClass, method_info: t.MethodInfo): t.MethodHandle
+    local interned = self:_get_interned_method(class, method_info.name, method_info.descriptor)
+    if interned then
+        return interned
     end
 
-    local by_name = by_class[name]
-    if not by_name then
-        by_name = {}
-        by_class[name] = by_name
-    end
-
-    by_name[descriptor] = field
-end
-
-local function create_interned_method_handle(class: t.JvmClass, method_info: t.MethodInfo): t.MethodHandle
     local handle: t.MethodHandle = table.freeze({
         class = class,
         info = method_info,
     })
 
-    set_interned_method(class.jvm, class, method_info.name, method_info.descriptor, handle)
+    local by_class = self._interned_method_handles[class]
+    if not by_class then
+        by_class = {}
+        self._interned_method_handles[class] = by_class
+    end
+
+    local by_name = by_class[method_info.name]
+    if not by_name then
+        by_name = {}
+        by_class[method_info.name] = by_name
+    end
+
+    by_name[method_info.descriptor] = handle
+
     return handle
-end
-
-function Jvm._create_method_handle(self: t.Jvm, class: t.JvmClass, method_info: t.MethodInfo): t.MethodHandle
-    return get_interned_method(self, class, method_info.name, method_info.descriptor)
-        or create_interned_method_handle(class, method_info)
-end
-
-function Jvm.resolve_method(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.MethodHandle
-    local interned_method = get_interned_method(self, class, name, descriptor)
-    if interned_method then
-        return interned_method
-    end
-
-    if class.interface then
-        return self:throw_exception("java/lang/IncompatibleClassChangeError", `{class.fqcn} is an interface`)
-    end
-
-    for _, method in class._methods do
-        if method.name == name and method.descriptor == descriptor then
-            -- CHECK ACCESS
-            return create_interned_method_handle(class, method)
-        end
-    end
-
-    local current = class.super
-    while current do
-        for _, method in current._methods do
-            if method.name == name and method.descriptor == descriptor then
-                -- CHECK ACCESS
-                return create_interned_method_handle(current, method)
-            end
-        end
-        current = current.super
-    end
-
-    local function deep_search_interface_method(class_or_interface: t.JvmClass): (t.JvmClass?, t.MethodInfo?)
-        for _, interface in class_or_interface.interfaces do
-            for _, method in interface._methods do
-                if method.name == name and method.descriptor == descriptor then
-                    return interface, method
-                end
-            end
-            local found_class, found_method = deep_search_interface_method(interface)
-            if found_class and found_method then
-                return found_class, found_method
-            end
-        end
-        return nil, nil
-    end
-
-    local found_class, found_method = deep_search_interface_method(class)
-    if found_class and found_method then
-        -- CHECK ACCESS HERE
-        return create_interned_method_handle(found_class, found_method)
-    end
-
-    return self:throw_exception("java/lang/NoSuchMethodError", `{class.fqcn} has no method {name}{descriptor}`)
 end
 
 function Jvm.create_string(self: t.Jvm, value: string): t.JvmObject
@@ -618,8 +507,8 @@ function Jvm.create_exception(
     local e = Exception:_new_uninitialised(magic)
 
     local Throwable = self._classes.bootstrap["java/lang/Throwable"]
-    local message_field = self:resolve_field(Throwable, "message", "Ljava/lang/String;")
-    local cause_field = self:resolve_field(Throwable, "cause", "Ljava/lang/Throwable;")
+    local message_field = Throwable:resolve_field("message", "Ljava/lang/String;")
+    local cause_field = Throwable:resolve_field("cause", "Ljava/lang/Throwable;")
 
     e:set_field(message_field, message)
     e:set_field(cause_field, cause)

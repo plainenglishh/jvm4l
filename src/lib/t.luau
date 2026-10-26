@@ -137,9 +137,11 @@ export type Jvm = setmetatable<
         resolve_class: (self: Jvm, name: string, initiating_loader: JvmClassLoader?) -> JvmClass,
         define_class: (self: Jvm, classfile: buffer, defining_loader: JvmClassLoader) -> JvmClass,
 
-        resolve_field: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> FieldHandle,
-        _create_method_handle: (self: Jvm, class: JvmClass, method_info: MethodInfo) -> MethodHandle,
-        resolve_method: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> MethodHandle,
+        _get_interned_field: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> FieldHandle?,
+        _create_interned_field: (self: Jvm, class: JvmClass, field_info: FieldInfo) -> FieldHandle,
+
+        _get_interned_method: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> MethodHandle?,
+        _create_interned_method: (self: Jvm, class: JvmClass, method_info: MethodInfo) -> MethodHandle,
 
         create_string: (self: Jvm, value: string) -> JvmObject,
         create_array: (self: Jvm, element: JvmType, size_or_values: number | { JvmValue }) -> JvmObject,
@@ -360,6 +362,10 @@ export type JvmClass = setmetatable<
         implements: (self: JvmClass, interface: JvmClass) -> boolean,
         get_static_field: (self: JvmClass, field: FieldHandle) -> JvmValue,
         set_static_field: (self: JvmClass, field: FieldHandle, value: JvmValue) -> (),
+
+        resolve_method: (self: JvmClass, name: string, descriptor: string) -> MethodHandle,
+        resolve_field: (self: JvmClass, name: string, descriptor: string) -> FieldHandle,
+
         invoke_static: (self: JvmClass, method: MethodHandle, ...JvmValue) -> JvmValue,
 
         -- Reflection
@@ -464,7 +470,7 @@ export type FieldInfo = {
 --- Resolved field handle.
 export type FieldHandle = {
     read class: JvmClass,
-    read field_info: FieldInfo,
+    read info: FieldInfo,
 }
 
 --- Method metadata.

@@ -14,7 +14,7 @@ local function link_native(class_name: string, signature: string): jvm4l.NativeM
     elseif class_name == "jvm4l/Test" and signature == "calls_error_wrapper:()V" then
         return function(jvm: jvm4l.Jvm)
             local Test = jvm:resolve_class("jvm4l/Test")
-            local error_wrapper = jvm:resolve_method(Test, "error_wrapper", "()V")
+            local error_wrapper = Test:resolve_method("error_wrapper", "()V")
             Test:invoke_static(error_wrapper)
             return nil
         end
@@ -45,7 +45,7 @@ local vm = jvm4l.Jvm.new({
 
 local ok, err = pcall(function(...)
     local Test = vm:resolve_class("jvm4l/Test")
-    local test_ref = vm:resolve_method(Test, "main", "()V")
+    local test_ref = Test:resolve_method("main", "()V")
     Test:invoke_static(test_ref)
 
     --local Double = vm:resolve_class("java/lang/Double")

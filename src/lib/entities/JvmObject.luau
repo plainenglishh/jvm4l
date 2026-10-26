@@ -1,18 +1,16 @@
 local execution_engine = require("../execution_engine")
 local t = require("../t") 
 local typechecker = require("../typechecker")
-local util = require("../util") 
 
-local function hashcode_of(o: any)
+local function hashcode_of(o: any): number
     local ptr_str = string.match(tostring(o), "0x(%x+)") or error("unable to get hash code")
     local ptr = integer.fromstring(ptr_str, 16)
 
-    local upper = integer.band(integer.idiv(ptr, 0x100000000i), 0xFFFFFFFFi)
-    local lower = integer.band(ptr, 0xFFFFFFFFi)
-    local folded = integer.bxor(upper, lower)
-
-    folded = integer.idiv(folded, 8i)
-    folded = integer.band(integer.mul(folded, 0x9E3779B9i), 0xFFFFFFFFi)
+    local shifted_ptr = integer.idiv(ptr, 8i)
+    local scrambled = integer.mul(shifted_ptr, 0x9E3779B97F4A7C15i)
+    local upper = integer.idiv(scrambled, 0x100000000i)
+    local lower = integer.band(scrambled, 0xFFFFFFFFi)
+    local folded = integer.band(integer.bxor(upper, lower), 0xFFFFFFFFi)
 
     if integer.ge(folded, 0x80000000i) then
         return integer.tonumber(integer.sub(folded, 0x100000000i))
@@ -65,7 +63,7 @@ end
 function JvmObject._initialise(self: t.JvmObject, constructor: t.MethodHandle?, ...: t.JvmValue)
     local args = table.pack(...)
     table.insert(args, 1, self)
-    local constructor = constructor or self.jvm:resolve_method(self.class, "<init>", "()V")
+    local constructor = constructor or self.class:resolve_method("<init>", "()V")
     local dispatched_constructor = execution_engine.dispatch(self.jvm, constructor, "special", self.class, self)
     execution_engine.invoke_sync(self.jvm, dispatched_constructor, args)
 end
@@ -85,7 +83,7 @@ end
 
 function JvmObject.set_field(self: t.JvmObject, field: t.FieldHandle, value: t.JvmValue)
     assert(self:instance_of(field.class))
-    if not typechecker.check_field(self.jvm, value, self.class, field.field_info) then
+    if not typechecker.check_field(self.jvm, value, self.class, field.info) then
         self.jvm:throw_exception("java/lang/IllegalArgumentException")
     end
     self._field_values[field] = value

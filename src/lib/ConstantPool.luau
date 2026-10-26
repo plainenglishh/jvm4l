@@ -33,7 +33,7 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
             class_parser.utf8_value(classfile, name_and_type.name_index),
             class_parser.utf8_value(classfile, name_and_type.descriptor_index)
         local class = self:get(cp_info.class_index, "class")
-        value = { type = "field" :: "field", value = self._jvm:resolve_field(class, name, descriptor) }
+        value = { type = "field" :: "field", value = class:resolve_field(name, descriptor) }
     elseif cp_info.tag == "Methodref" then
         local name_and_type = classfile.constant_pool[cp_info.name_and_type_index]
         assert(name_and_type.tag == "NameAndType")
@@ -41,7 +41,7 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
             class_parser.utf8_value(classfile, name_and_type.name_index),
             class_parser.utf8_value(classfile, name_and_type.descriptor_index)
         local class = self:get(cp_info.class_index, "class")
-        value = { type = "method" :: "method", value = self._jvm:resolve_method(class, name, descriptor) }
+        value = { type = "method" :: "method", value = class:resolve_method(name, descriptor) }
     elseif cp_info.tag == "InterfaceMethodref" then
         local name_and_type = classfile.constant_pool[cp_info.name_and_type_index]
         assert(name_and_type.tag == "NameAndType")
@@ -51,7 +51,7 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
         local class = self:get(cp_info.class_index, "class")
         value = {
             type = "interface_method" :: "interface_method",
-            value = self._jvm:resolve_method(class, name, descriptor),
+            value = class:resolve_method(name, descriptor),
         }
     elseif cp_info.tag == "String" then
         local str = self._jvm:create_string(class_parser.utf8_value(classfile, cp_info.string_index))
@@ -65,7 +65,7 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
     elseif cp_info.tag == "Long" then
         value = { type = "long" :: "long", value = cp_info.value }
     else
-        self._jvm:internal_error(`cant resolve constant type {cp_info.tag}`, nil, true)
+        self._jvm:internal_error(`cant resolve constant type {cp_info.tag}`)
     end
 
     local value = value :: t.ConstantValue

@@ -100,7 +100,7 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
     -- TODO: do ConstantValue here
 
     if self:get_method("<clinit>", "()V") then
-        local clinit = self.jvm:resolve_method(self, "<clinit>", "()V")
+        local clinit = self:resolve_method("<clinit>", "()V")
         local dispatched_clinit = execution_engine.dispatch(self.jvm, clinit, "static", self)
         execution_engine.invoke_sync(self.jvm, dispatched_clinit, { n = 0 })
     end
@@ -157,6 +157,112 @@ function JvmClass.set_static_field(self: t.JvmClass, field: t.FieldHandle, value
     self:_ensure_initialised()
     assert(self == field.class or self:inherits_from(field.class))
     field.class._static_field_values[field] = value
+end
+
+function JvmClass.resolve_field(self: t.JvmClass, name: string, descriptor: string): t.FieldHandle
+    local jvm = self.jvm
+    local interned_field = jvm:_get_interned_field(self, name, descriptor)
+    if interned_field then
+        return interned_field
+    end
+
+    for _, field in self._fields do
+        if field.name == name and field.descriptor == descriptor then
+            -- CHECK ACCESS
+            return jvm:_create_interned_field(self, field)
+        end
+    end
+
+    local function deep_search_field(class_or_interface: t.JvmClass): (t.JvmClass?, t.FieldInfo?)
+        for _, field in class_or_interface._fields do
+            if field.name == name and field.descriptor == descriptor then
+                return class_or_interface, field
+            end
+        end
+
+        for _, interface in class_or_interface.interfaces do
+            local found_class, found_field = deep_search_field(interface)
+            if found_class and found_field then
+                return found_class, found_field
+            end
+        end
+
+        return nil, nil
+    end
+
+    for _, interface in self.interfaces do
+        local found_class, found_field = deep_search_field(interface)
+        if found_class and found_field then
+            -- CHECK ACCESS
+            return jvm:_create_interned_field(found_class, found_field)
+        end
+    end
+
+    local current = self.super
+    while current do
+        for _, field in current._fields do
+            if field.name == name and field.descriptor == descriptor then
+                -- CHECK ACCESS
+                return jvm:_create_interned_field(current, field)
+            end
+        end
+        current = current.super
+    end
+
+    return jvm:throw_exception("java/lang/NoSuchFieldError", `{self.fqcn} has no field {name}:{descriptor}`)
+end
+
+function JvmClass.resolve_method(self: t.JvmClass, name: string, descriptor: string): t.MethodHandle
+    local jvm = self.jvm
+    local interned_method = jvm:_get_interned_method(self, name, descriptor)
+    if interned_method then
+        return interned_method
+    end
+
+    if self.interface then
+        return jvm:throw_exception("java/lang/IncompatibleClassChangeError", `{self.fqcn} is an interface`)
+    end
+
+    for _, method in self._methods do
+        if method.name == name and method.descriptor == descriptor then
+            -- CHECK ACCESS
+            return jvm:_create_interned_method(self, method)
+        end
+    end
+
+    local current = self.super
+    while current do
+        for _, method in current._methods do
+            if method.name == name and method.descriptor == descriptor then
+                -- CHECK ACCESS
+                return self.jvm:_create_interned_method(current, method)
+            end
+        end
+        current = current.super
+    end
+
+    local function deep_search_interface_method(class_or_interface: t.JvmClass): (t.JvmClass?, t.MethodInfo?)
+        for _, interface in class_or_interface.interfaces do
+            for _, method in interface._methods do
+                if method.name == name and method.descriptor == descriptor then
+                    return interface, method
+                end
+            end
+            local found_class, found_method = deep_search_interface_method(interface)
+            if found_class and found_method then
+                return found_class, found_method
+            end
+        end
+        return nil, nil
+    end
+
+    local found_class, found_method = deep_search_interface_method(self)
+    if found_class and found_method then
+        -- CHECK ACCESS HERE
+        return jvm:_create_interned_method(found_class, found_method)
+    end
+
+    return jvm:throw_exception("java/lang/NoSuchMethodError", `{self.fqcn} has no method {name}{descriptor}`)
 end
 
 function JvmClass.invoke_static(self: t.JvmClass, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue

@@ -54,7 +54,7 @@ function dispatcher.dispatch(
                 while current do
                     local info = current:get_method(method.info.name, method.info.descriptor)
                     if info then
-                        dispatched_method = jvm:_create_method_handle(current, info)
+                        dispatched_method = jvm:_create_interned_method(current, info)
                         break
                     end
 
@@ -85,7 +85,7 @@ function dispatcher.dispatch(
                 if type == "virtual" and info.private then
                     -- keep searching
                 else
-                    dispatched_method = jvm:_create_method_handle(current, info)
+                    dispatched_method = jvm:_create_interned_method(current, info)
                     break
                 end
             end
