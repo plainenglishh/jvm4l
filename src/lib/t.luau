@@ -29,7 +29,7 @@ export type ConstantValueType =
     | "method"
     | "interface_method"
     | "string"
-    | "integer"
+    | "int"
     | "float"
     | "double"
     | "long"
@@ -39,7 +39,7 @@ export type ConstantValue =
     | { type: "field", value: FieldHandle }
     | { type: "method" | "interface_method", value: MethodHandle }
     | { type: "string", value: JvmObject }
-    | { type: "integer" | "float" | "double", value: number }
+    | { type: "int" | "float" | "double", value: number }
     | { type: "long", value: integer }
 
 export type ConstantPool = setmetatable<
@@ -58,7 +58,7 @@ export type ConstantPool = setmetatable<
             & ((self: ConstantPool, idx: number, type: "field") -> FieldHandle)
             & ((self: ConstantPool, idx: number, type: "method" | "interface_method") -> MethodHandle)
             & ((self: ConstantPool, idx: number, type: "string") -> JvmObject)
-            & ((self: ConstantPool, idx: number, type: "integer" | "float" | "double") -> number)
+            & ((self: ConstantPool, idx: number, type: "int" | "float" | "double") -> number)
             & ((self: ConstantPool, idx: number, type: "long") -> integer),
     }
 >

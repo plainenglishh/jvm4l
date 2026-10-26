@@ -1,5 +1,6 @@
 local jvm_type = require("../jvm_type")
 local t = require("../t")
+local typechecker = require("../typechecker")
 
 local frame = {}
 
@@ -13,6 +14,13 @@ function frame.push_on(
     local frame: t.StackFrame
     local method_info = method.info
     local class = method.class
+
+    if not typechecker.check_method(jvm, args, class, method_info) then
+        jvm:throw_exception(
+            "java/lang/IncompatibleClassChangeError",
+            `invalid args given to {method.class.fqcn}.{method_info.name}{method_info.descriptor}`
+        )
+    end
 
     if method_info.code.kind == "java" then
         local locals: { any } = table.create(method_info.code.max_locals)
@@ -88,10 +96,25 @@ end
 --[=[
     Completes the most recent frame, returning `value`.
 ]=]
-function frame.return_from_current_frame(thread: t.Thread, count: number, value: t.JvmValue)
+function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: number, value: t.JvmValue)
     local stack = thread.stack
     local frame = stack[#stack]
     local parent_frame = stack[#stack - 1]
+
+    local return_type = frame.method.type:get().returns
+    local return_ok = false
+    if return_type == "void" then
+        return_ok = value == nil
+    else
+        return_ok = typechecker.check_value(value, return_type)
+    end
+
+    if not return_ok then
+        jvm:throw_exception(
+            "java/lang/IncompatibleClassChangeError",
+            `invalid return from {frame.class.fqcn}{frame.method.name}{frame.method.descriptor}, got luau {type(value)}`
+        )
+    end
 
     if frame.invocation then
         complete_invocation(frame.invocation, value)

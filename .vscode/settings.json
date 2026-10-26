@@ -4,4 +4,5 @@
   "luau-lsp.fflags.enableByDefault": true,
   "luau-lsp.fflags.enableNewSolver": true,
   "editor.formatOnSave": true,
+  "mandolin.lintConfigPath": "./.config.luau"
 }

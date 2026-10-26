@@ -1,4 +1,5 @@
 local t = require("../t")
+local util = require("../util")
 local dispatcher = require("./dispatcher")
 local frame = require("./frame")
 
@@ -95,10 +96,8 @@ local function step(jvm: t.Jvm)
     local method = f.method
 
     if f.code.kind == "luau" then
-        -- typecheck here
         local value = f.code.closure(jvm, unpack(f.args))
-        -- typecheck here
-        return frame.return_from_current_frame(thread, #method.type:get().arguments, value)
+        return frame.return_from_current_frame(jvm, thread, #method.type:get().arguments, value)
     end
 
     local code = f.code.code
@@ -110,14 +109,11 @@ local function step(jvm: t.Jvm)
     local start_pc = f.pc
     f.start_pc = start_pc
 
-    if f.pc == 0 then
-        -- typecheck here
-    end
-
     local op = buffer.readu8(code, start_pc)
     f.pc += 1
 
     if op == 0x00 then -- nop
+        -- do nothing
     elseif op == 0x01 then -- aconst_null
         push(f, nil, "1") -- nil is a null ref
     elseif op >= 0x02 and op <= 0x08 then -- aconst_i
@@ -133,6 +129,28 @@ local function step(jvm: t.Jvm)
         f.pc += 1
         local value = if raw_byte >= 0x80 then raw_byte - 0x100 else raw_byte
         push(f, value, "1")
+    elseif op == 0x11 then -- sipush
+        local raw_short = read_u16be(code, f.pc)
+        f.pc += 2
+        local value = if raw_short >= 0x8000 then raw_short - 0x10000 else raw_short
+        push(f, value, "1")
+    elseif op == 0x12 then -- ldc
+        local idx = buffer.readu8(code, f.pc)
+        f.pc += 1
+
+        if k:is(idx, "int") then
+            push(f, k:get(idx, "int"), "1")
+        elseif k:is(idx, "float") then
+            push(f, k:get(idx, "float"), "1")
+        elseif k:is(idx, "string") then
+            push(f, k:get(idx, "string"), "1")
+        elseif k:is(idx, "class") then
+            push(f, k:get(idx, "class"), "1")
+        end -- todo(dynamic): MethodType and MethodHandle
+    elseif op >= 0x2A and op <= 0x2D then --aload_i
+        local idx = op - 0x2A
+        local value = locals[idx + 1]
+        push(f, value, "1")
     elseif op >= 0x4B and op <= 0x4E then -- astore_i
         local idx = op - 0x4B
         local ref = pop(f, "1")
@@ -144,16 +162,16 @@ local function step(jvm: t.Jvm)
         local method = k:get(idx, "method")
         local arg_count = #method.info.type:get().arguments
         local args: { any } = table.create(arg_count)
-        for i = 1, arg_count do
+        for _ = 1, arg_count do
             local v = pop(f, "any")
             table.insert(args, 1, v)
         end
         local dispatched_method = dispatcher.dispatch(jvm, method, "static", class)
         invoke_inline(jvm, dispatched_method, args)
     elseif op == 0xAC then -- ireturn
-        frame.return_from_current_frame(thread, 1, pop(f, "1"))
+        frame.return_from_current_frame(jvm, thread, 1, pop(f, "1"))
     elseif op == 0xB1 then -- return
-        frame.return_from_current_frame(thread, 0, nil)
+        frame.return_from_current_frame(jvm, thread, 0, nil)
     elseif op == 0xA7 then -- goto
         local raw_offset = read_u16be(code, f.pc)
         f.pc += 2

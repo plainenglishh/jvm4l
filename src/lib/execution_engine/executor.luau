@@ -4,19 +4,43 @@ local frame = require("./frame")
 local scheduler = require("./scheduler")
 local step = require("./step")
 
-local function is_exception(value: any): boolean
-    return type(value) == "table" and getmetatable(value) == JvmObject
+local function is_throwable(value: unknown): boolean
+    if type(value) ~= "table" then
+        return false
+    end
+
+    if getmetatable(value) ~= JvmObject then
+        return false
+    end
+
+    local value = value :: t.JvmObject
+    return value:instance_of(value.jvm._classes.bootstrap["java/lang/Throwable"])
 end
 
-local function coerce_exception(jvm: t.Jvm, exception: unknown): t.JvmObject
-    return if is_exception(exception)
-        then exception :: t.JvmObject
-        else jvm:create_exception("jvm4l/luau/LuauError", tostring(exception))
+local function coerce_exception(jvm: t.Jvm, value: unknown): t.JvmObject
+    if is_throwable(value, "java/lang/Throwable") then
+        return value :: t.JvmObject
+    else
+        local message: string
+        if type(value) == "table" and getmetatable(value) == JvmObject then
+            local value = value :: t.JvmObject
+
+            if value:instance_of(value.jvm._classes.bootstrap["java/lang/String"]) then
+                message = value:inner_string()
+            else
+                message = tostring(value)
+            end
+        else
+            message = tostring(value)
+        end
+
+        return jvm:create_exception("jvm4l/luau/LuauError", message)
+    end
 end
 
 local function match_exception_handler(f: t.StackFrame, exception: t.JvmObject): t.ExceptionHandler?
     assert(f.code.kind == "java")
-    for i, exception_handler in f.code.exceptions do
+    for _, exception_handler in f.code.exceptions do
         if f.start_pc < exception_handler.start_pc or f.start_pc >= exception_handler.end_pc then
             continue
         end
@@ -88,8 +112,9 @@ local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
         scheduler.try_reschedule(jvm)
         local thread = jvm.current_thread
         if not thread then
-            error("no thread selected")
+            continue
         end
+
         thread.budget -= 1
 
         local ok, exception = pcall(step, jvm)

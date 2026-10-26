@@ -75,10 +75,14 @@ local jvm4l = {}
 jvm4l.Jvm = require("@self/entities/Jvm")
 
 function jvm4l.display_exception(exception: t.JvmObject): string
+    if type(exception) == "string" then
+        return `uncoerced exception: {exception}`
+    end
+
     local jvm = exception.jvm
     local Throwable = jvm:resolve_class("java/lang/Throwable")
     if not exception:instance_of(Throwable) then
-        return exception:__tostring()
+        return `non-throwable exception: {exception:__tostring()}`
     end
 
     local message_ref = jvm:resolve_field(Throwable, "message", "Ljava/lang/String;")

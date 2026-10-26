@@ -101,13 +101,6 @@ function class_parser.parse(b: buffer): t.Classfile
         return value
     end
 
-    local function read_buffer(length: number): buffer
-        local value = buffer.create(length)
-        buffer.copy(value, 0, b, cursor, length)
-        cursor += length
-        return value
-    end
-
     local function read_cp_info(): t.CfCpInfo
         local tag = read_u8()
 

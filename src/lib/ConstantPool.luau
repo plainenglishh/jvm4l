@@ -57,13 +57,15 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
         local str = self._jvm:create_string(class_parser.utf8_value(classfile, cp_info.string_index))
         value = { type = "string" :: "string", value = str }
     elseif cp_info.tag == "Integer" then
-        value = { type = "integer" :: "integer", value = cp_info.value }
+        value = { type = "int" :: "int", value = cp_info.value }
     elseif cp_info.tag == "Float" then
         value = { type = "float" :: "float", value = cp_info.value }
     elseif cp_info.tag == "Double" then
         value = { type = "double" :: "double", value = cp_info.value }
     elseif cp_info.tag == "Long" then
         value = { type = "long" :: "long", value = cp_info.value }
+    else
+        self._jvm:internal_error(`cant resolve constant type {cp_info.tag}`, nil, true)
     end
 
     local value = value :: t.ConstantValue

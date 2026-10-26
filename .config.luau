@@ -9,4 +9,9 @@ return {
             LocalShadow = false,
         },
     },
+    lute = {
+        lint = {
+            ignores = { "*" },
+        },
+    },
 }

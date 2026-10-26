@@ -10,9 +10,10 @@ An experimental pure-Luau implementation of a Java 8 Virtual Machine.
 
 The purpose of this repository is to document my progress. 
 
-While I hope to eventually complete a JVM capable of executing Java programs, a 
-production grade JVM is not the goal. Regardless of how many features are 
-implemented, this project is intended for experimental and hobby use only.
+While I hope to eventually complete a JVM capable of executing most Java 
+programs, a production grade JVM is not the goal. Regardless of how many 
+features are implemented, this project is intended for experimental and hobby 
+use only.
 
 ## Contributing
 

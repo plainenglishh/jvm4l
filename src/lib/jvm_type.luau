@@ -1,7 +1,7 @@
 local t = require("./t")
 local jvm_type = {}
 
-function jvm_type.parse_field_descriptor(
+function jvm_type.resolve_field_descriptor(
     jvm: t.Jvm,
     descriptor: string,
     loader: t.JvmClassLoader,
@@ -43,14 +43,14 @@ function jvm_type.parse_field_descriptor(
         local name = string.sub(descriptor, start + 1, i - 1)
         return jvm:resolve_class(name), i + 1
     elseif first_char == "[" then
-        local _, new_i = jvm_type.parse_field_descriptor(jvm, descriptor, loader, i + 1)
+        local _, new_i = jvm_type.resolve_field_descriptor(jvm, descriptor, loader, i + 1)
         return jvm:resolve_class(string.sub(descriptor, i + 1, new_i - 1), loader), new_i
     else
         error("invalid descriptor")
     end
 end
 
-function jvm_type.parse_method_descriptor(jvm: t.Jvm, descriptor: string, loader: t.JvmClassLoader): t.JvmMethodType
+function jvm_type.resolve_method_descriptor(jvm: t.Jvm, descriptor: string, loader: t.JvmClassLoader): t.JvmMethodType
     assert(string.sub(descriptor, 1, 1) == "(", "invalid descriptor")
 
     local arguments = {}
@@ -63,7 +63,7 @@ function jvm_type.parse_method_descriptor(jvm: t.Jvm, descriptor: string, loader
             break
         end
 
-        local ty, new_i = jvm_type.parse_field_descriptor(jvm, descriptor, loader, i)
+        local ty, new_i = jvm_type.resolve_field_descriptor(jvm, descriptor, loader, i)
         table.insert(arguments, ty)
         i = new_i
     end
@@ -72,7 +72,7 @@ function jvm_type.parse_method_descriptor(jvm: t.Jvm, descriptor: string, loader
     if string.sub(descriptor, i, i) == "V" then
         returns = "void"
     else
-        returns = jvm_type.parse_field_descriptor(jvm, descriptor, loader, i)
+        returns = jvm_type.resolve_field_descriptor(jvm, descriptor, loader, i)
     end
 
     return {

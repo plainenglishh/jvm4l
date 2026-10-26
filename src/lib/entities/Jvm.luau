@@ -96,7 +96,7 @@ local function get_members(
             signature = signature,
             code = code,
             type = Lazy.new(function()
-                return jvm_type.parse_method_descriptor(jvm, descriptor, defining_loader)
+                return jvm_type.resolve_method_descriptor(jvm, descriptor, defining_loader)
             end),
 
             public = bit32.band(method.access_flags, 0x0001) ~= 0,
@@ -125,7 +125,7 @@ local function get_members(
             descriptor = descriptor,
             signature = `{name}:{descriptor}`,
             type = Lazy.new(function()
-                local value = jvm_type.parse_field_descriptor(jvm, descriptor, defining_loader)
+                local value = jvm_type.resolve_field_descriptor(jvm, descriptor, defining_loader)
                 return value
             end),
 

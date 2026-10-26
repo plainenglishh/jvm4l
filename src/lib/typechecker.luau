@@ -71,14 +71,22 @@ end
 ]=]
 function typechecker.check_method(jvm: t.Jvm, values: { t.JvmValue }, class: t.JvmClass, target: t.MethodInfo): boolean
     local method_type = target.type:get()
+    local static = target.static
 
-    if #values ~= #method_type.arguments then
+    if #values ~= #method_type.arguments + if static then 0 else 1 then
         return false
     end
 
-    -- todo: check this
+    local arg_start = 1
+    if not static then
+        arg_start = 2
 
-    for i = 1, #method_type.arguments do
+        if not typechecker.check_value(values[1], class) then
+            return false
+        end
+    end
+
+    for i = arg_start, #method_type.arguments do
         if not typechecker.check_value(values[i], method_type.arguments[i]) then
             return false
         end

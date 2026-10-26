@@ -11,18 +11,7 @@ public class Test {
         throw new AssertionError();
     }
 
-    public static native void calls_error_wrapper();
-    public static native void print_int(int value);
-
-    static void error_wrapper() {
-        Globals.error();
-    }
-
-    static int get_1() {
-        return 1;
-    }
-
     public static void main() {
-        calls_error_wrapper();
+        Globals.error("Hello, World!");
     }
 }

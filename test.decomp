@@ -9,22 +9,9 @@ public class jvm4l.Test {
        8: invokespecial #3                  // Method java/lang/AssertionError."<init>":()V
       11: athrow
 
-  public static native void calls_error_wrapper();
-
-  public static native void print_int(int);
-
-  static void error_wrapper();
-    Code:
-       0: invokestatic  #4                  // Method jvm4l/luau/Globals.error:()V
-       3: return
-
-  static int get_1();
-    Code:
-       0: iconst_1
-       1: ireturn
-
   public static void main();
     Code:
-       0: invokestatic  #5                  // Method calls_error_wrapper:()V
-       3: return
+       0: ldc           #4                  // String Hello, World!
+       2: invokestatic  #5                  // Method jvm4l/luau/Globals.error:(Ljava/lang/Object;)V
+       5: return
 }
