@@ -18,27 +18,6 @@ local function is_throwable(value: unknown): boolean
     return value:instance_of(value.jvm._classes.bootstrap["java/lang/Throwable"])
 end
 
-local function coerce_exception(jvm: t.Jvm, value: unknown): t.JvmObject
-    if is_throwable(value, "java/lang/Throwable") then
-        return value :: t.JvmObject
-    else
-        local message: string
-        if type(value) == "table" and getmetatable(value) == JvmObject then
-            local value = value :: t.JvmObject
-
-            if value:instance_of(value.jvm._classes.bootstrap["java/lang/String"]) then
-                message = value:inner_string()
-            else
-                message = tostring(value)
-            end
-        else
-            message = tostring(value)
-        end
-
-        return jvm:create_exception("jvm4l/luau/LuauError", message)
-    end
-end
-
 local function match_exception_handler(f: t.StackFrame, exception: t.JvmObject): t.ExceptionHandler?
     assert(f.code.kind == "java")
     for _, exception_handler in f.code.exceptions do
@@ -118,12 +97,18 @@ local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
 
         thread.budget -= 1
 
-        local ok, exception = pcall(step, jvm)
+        local ok, exception = xpcall(step :: any, function(value): t.JvmObject
+            if is_throwable(value, "java/lang/Throwable") then
+                return value :: t.JvmObject
+            else
+                return jvm:create_internal_error(tostring(value), 2)
+            end
+        end, jvm)
+
         if ok then
             continue
         end
 
-        local exception: t.JvmObject = coerce_exception(jvm, exception)
         local caught = unwind_thread(jvm, thread, target, exception)
         if caught then
             continue

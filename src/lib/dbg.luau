@@ -23,6 +23,25 @@ function dbg.dump_stack(jvm: t.Jvm)
     end
 end
 
+function dbg.vm_info(jvm: t.Jvm): string
+    local thread = jvm.current_thread
+    if not thread then
+        return "no thread"
+    end
+
+    local frame = thread.stack[#thread.stack]
+    local message = `thread={thread.id}, frame={#thread.stack}`
+    if not frame then
+        message ..= ")"
+    elseif frame.code.kind == "java" then
+        message ..= `, native=false, pc={frame.start_pc})`
+    elseif frame.code.kind == "luau" then
+        message ..= ", native=true)"
+    end
+
+    return message
+end
+
 function dbg.trace(jvm: t.Jvm, format: string, ...: any)
     local trace = jvm._settings.trace
     if not trace then

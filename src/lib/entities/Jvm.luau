@@ -638,24 +638,17 @@ function Jvm.throw_exception(
     error(e, 0) -- Caught by the outer host if async, or the exec engine if inside bytecode
 end
 
-function Jvm.internal_error(self: t.Jvm, message: string, level: number?, include_vm_info: boolean?): never
+function Jvm.create_internal_error(self: t.Jvm, message: string, level: number?): t.JvmObject
     local traceback = debug.traceback(nil, (level or 1) + 1)
-    local thread = self.current_thread
-    if include_vm_info and thread then
-        local frame = thread.stack[#thread.stack]
-        message ..= ` (thread {thread.id}, frame {#thread.stack}`
-        if not frame then
-            message ..= ")"
-        elseif frame.code.kind == "java" then
-            message ..= `, pc = {frame.start_pc})`
-        elseif frame.code.kind == "luau" then
-            message ..= ", native frame)"
-        end
-    end
+    message ..= ` ({dbg.vm_info(self)})`
 
     local cause =
         self:create_exception("jvm4l/luau/LuauError", message .. "\n    " .. traceback:gsub("\n", "\n    "), nil, true)
-    return self:throw_exception("java/lang/InternalError", message, cause)
+    return self:create_exception("java/lang/InternalError", message, cause)
+end
+
+function Jvm.internal_error(self: t.Jvm, message: string, level: number?): never
+    error(self:create_internal_error(message, level), -1)
 end
 
 function Jvm.coerce(self: t.Jvm, ...: t.IntoJvmValue): ...t.JvmValue

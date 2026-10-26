@@ -1,3 +1,4 @@
+local JvmObject = require("../entities/JvmObject")
 local t = require("../t")
 local dispatcher = require("./dispatcher")
 local frame = require("./frame")
@@ -96,6 +97,34 @@ local function set_local(f: t.StackFrame, idx: number, value: t.JvmValue)
     f.locals[idx + 1] = value
 end
 
+local function supports_wide(op: number): boolean
+    return op == 0x15
+        or op == 0x17
+        or op == 0x19
+        or op == 0x16
+        or op == 0x18
+        or op == 0x36
+        or op == 0x38
+        or op == 0x3a
+        or op == 0x37
+        or op == 0x39
+        or op == 0xa9
+        or op == 0x84
+end
+
+local function is_throwable(value: unknown): boolean
+    if type(value) ~= "table" then
+        return false
+    end
+
+    if getmetatable(value) ~= JvmObject then
+        return false
+    end
+
+    local value = value :: t.JvmObject
+    return value:instance_of(value.jvm._classes.bootstrap["java/lang/Throwable"])
+end
+
 --[=[ 
     Execute a single VM step (a native call, or a single bytecode instruction)
 
@@ -110,7 +139,37 @@ local function step(jvm: t.Jvm)
     local method = f.method
 
     if f.code.kind == "luau" then
-        local value = f.code.closure(jvm, unpack(f.args))
+        local ok, value = xpcall(f.code.closure, function(e: any)
+            if is_throwable(e) then
+                return e :: t.JvmObject
+            end
+
+            local message: string
+            if type(e) == "table" and getmetatable(e) == JvmObject then
+                local value = e :: t.JvmObject
+
+                if value:instance_of(value.jvm._classes.bootstrap["java/lang/String"]) then
+                    message = value:inner_string()
+                else
+                    message = tostring(value)
+                end
+            else
+                message = tostring(e)
+            end
+
+            local traceback = debug.traceback("", 2)
+            return jvm:create_exception(
+                "jvm4l/luau/LuauError",
+                message .. "    " .. traceback:gsub("\n", "\n    "),
+                nil,
+                true
+            )
+        end, jvm, unpack(f.args))
+
+        if not ok then
+            error(value, 0)
+        end
+
         return frame.return_from_current_frame(jvm, thread, #method.type:get().arguments, value)
     end
 
@@ -123,6 +182,17 @@ local function step(jvm: t.Jvm)
 
     local op = buffer.readu8(code, start_pc)
     f.pc += 1
+
+    local wide = false
+    if op == 0xC4 then -- wide
+        wide = true
+        op = buffer.readu8(code, start_pc)
+        f.pc += 1
+    end
+
+    if wide and not supports_wide(op) then
+        jvm:internal_error(string.format("opcode %02X does not support wide", op))
+    end
 
     if op == 0x00 then -- nop
         -- do nothing
@@ -195,7 +265,7 @@ local function step(jvm: t.Jvm)
 
         f.pc = start_pc + offset
     else
-        jvm:internal_error(string.format("unimplemented opcode 0x%02X", op), nil, true)
+        jvm:internal_error(string.format("unimplemented opcode 0x%02X", op))
     end
 end
 

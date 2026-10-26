@@ -158,7 +158,8 @@ export type Jvm = setmetatable<
         ) -> never,
 
         --- Creates an `InternalError`, with a `LuauError` as the cause.
-        internal_error: (self: Jvm, message: string, level: number?, include_vm_info: boolean?) -> never,
+        create_internal_error: (self: Jvm, message: string, level: number?) -> JvmObject,
+        internal_error: (self: Jvm, message: string, level: number?) -> never,
 
         coerce: (self: Jvm, ...IntoJvmValue) -> ...JvmValue,
 
