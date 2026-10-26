@@ -30,11 +30,11 @@ end
 
 local LONG_SLOT_MARKER = newproxy(false)
 
-local function push(frame: t.StackFrame, value: t.JvmValue, slots: "1" | "2")
-    assert(frame.code.kind == "java")
-    local stack = frame.stack
+local function push(f: t.StackFrame, value: t.JvmValue, slots: "1" | "2")
+    assert(f.code.kind == "java")
+    local stack = f.stack
 
-    local top = frame.stack_top + 1
+    local top = f.stack_top + 1
     stack[top] = value
 
     if slots == "2" then
@@ -42,13 +42,13 @@ local function push(frame: t.StackFrame, value: t.JvmValue, slots: "1" | "2")
         stack[top] = LONG_SLOT_MARKER
     end
 
-    frame.stack_top = top
+    f.stack_top = top
 end
 
-local function pop(frame: t.StackFrame, slots: "1" | "2" | "any"): (t.JvmValue, "1" | "2")
-    assert(frame.code.kind == "java")
-    local stack = frame.stack
-    local top = frame.stack_top
+local function pop(f: t.StackFrame, slots: "1" | "2" | "any"): (t.JvmValue, "1" | "2")
+    assert(f.code.kind == "java")
+    local stack = f.stack
+    local top = f.stack_top
 
     local val = stack[top]
     stack[top] = nil
@@ -61,25 +61,40 @@ local function pop(frame: t.StackFrame, slots: "1" | "2" | "any"): (t.JvmValue, 
         local real_val = stack[top]
         stack[top] = nil
         top -= 1
-        frame.stack_top = top
+        f.stack_top = top
         return real_val, "2"
     elseif slots == "1" then
         if val == LONG_SLOT_MARKER then
             error("expected 1-slot")
         end
-        frame.stack_top = top
+        f.stack_top = top
         return val, "1"
     else
         if val == LONG_SLOT_MARKER then
             local real_val = stack[top]
             stack[top] = nil
             top -= 1
-            frame.stack_top = top
+            f.stack_top = top
             return real_val, "2"
         end
-        frame.stack_top = top
+        f.stack_top = top
         return val, "1"
     end
+end
+
+local function get_local(f: t.StackFrame, idx: number): t.JvmValue
+    assert(f.code.kind == "java")
+    local value = f.locals[idx + 1]
+    if not value then
+        error(`no local at index {idx}`)
+    end
+
+    return value
+end
+
+local function set_local(f: t.StackFrame, idx: number, value: t.JvmValue)
+    assert(f.code.kind == "java")
+    f.locals[idx + 1] = value
 end
 
 --[=[ 
@@ -101,8 +116,6 @@ local function step(jvm: t.Jvm)
     end
 
     local code = f.code.code
-    local stack = f.stack
-    local locals = f.locals
     local class = f.class
     local k = f.class._constant_pool or error("expected constant pool")
 
@@ -149,12 +162,12 @@ local function step(jvm: t.Jvm)
         end -- todo(dynamic): MethodType and MethodHandle
     elseif op >= 0x2A and op <= 0x2D then --aload_i
         local idx = op - 0x2A
-        local value = locals[idx + 1]
+        local value = get_local(f, idx)
         push(f, value, "1")
     elseif op >= 0x4B and op <= 0x4E then -- astore_i
         local idx = op - 0x4B
-        local ref = pop(f, "1")
-        locals[idx + 1] = ref
+        local value = pop(f, "1")
+        set_local(f, idx, value)
     elseif op == 0xB8 then
         local idx = read_u16be(code, f.pc)
         f.pc += 2
