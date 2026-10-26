@@ -45,7 +45,11 @@ function JvmObject.__tostring(self: t.JvmObject): string
         local builder = {}
 
         for _, frame in self._magic.stack do
-            table.insert(builder, 1, `    at {frame.class.fqcn}.{frame.method.name}()`)
+            local path = ""
+            if frame.class.source_file then
+                path = `{frame.class.package}/{frame.class.source_file}`
+            end
+            table.insert(builder, 1, `    at {frame.class.fqcn}.{frame.method.name}({path})`)
         end
 
         stack_trace = "\n" .. table.concat(builder, "\n")

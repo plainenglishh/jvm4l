@@ -110,7 +110,7 @@ export type Jvm = setmetatable<
         read _settings: _JvmSettings,
         read _classes: { [JvmClassLoader]: { [string]: JvmClass } },
         read _threads: { Thread },
-        current_thread: Thread,
+        current_thread: Thread?,
         _next_thread_id: number,
         _exec_depth: number,
 
@@ -160,7 +160,7 @@ export type Jvm = setmetatable<
         ) -> never,
 
         --- Creates an `InternalError`, with a `LuauError` as the cause.
-        internal_error: (self: Jvm, message: string, level: number?) -> never,
+        internal_error: (self: Jvm, message: string, level: number?, include_vm_info: boolean?) -> never,
 
         coerce: (self: Jvm, ...IntoJvmValue) -> ...JvmValue,
 
@@ -283,6 +283,7 @@ export type JvmClass = setmetatable<
         read jvm: Jvm,
         read name: string,
         read fqcn: string,
+        read package: string,
         read super: JvmClass?,
         read interfaces: { JvmClass },
         read loader: JvmClassLoader,
@@ -295,6 +296,8 @@ export type JvmClass = setmetatable<
         read synthetic: boolean,
         read annotation: boolean,
         read enum: boolean,
+
+        read source_file: string?,
 
         read _methods: { MethodInfo },
         read _fields: { FieldInfo },
@@ -323,7 +326,8 @@ export type JvmClass = setmetatable<
             methods: { MethodInfo },
             fields: { FieldInfo },
             access_flags: number,
-            classfile: Classfile?
+            classfile: Classfile?,
+            source_file: string?
         ) -> JvmClass,
 
         --[=[

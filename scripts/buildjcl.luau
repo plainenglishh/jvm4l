@@ -88,7 +88,7 @@ local r = process.run({
     "1.8",
     "-target",
     "1.8",
-    "-g:none",
+    "-g",
     "-bootclasspath",
     "",
     "-sourcepath",

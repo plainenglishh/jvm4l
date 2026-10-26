@@ -87,6 +87,9 @@ local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
 
         scheduler.try_reschedule(jvm)
         local thread = jvm.current_thread
+        if not thread then
+            error("no thread selected")
+        end
         thread.budget -= 1
 
         local ok, exception = pcall(step, jvm)

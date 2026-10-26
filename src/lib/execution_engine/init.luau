@@ -25,7 +25,9 @@ end
     You must call `execution_engine.dispatch` before this to get the correct method, regardless of dispatch type.
 ]=]
 function execution_engine.invoke_sync(jvm: t.Jvm, method: DispatchedMethodHandle, args: { t.JvmValue }): t.JvmValue
-    local thread = jvm.current_thread
+    jvm.current_thread = jvm.current_thread or jvm:create_thread(false, nil)
+    local thread = jvm.current_thread or error("unreachable")
+
     local stack = thread.stack
     local this_frame = stack[#stack]
     if this_frame and this_frame.code.kind == "java" then

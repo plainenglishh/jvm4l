@@ -68,8 +68,11 @@ function frame.push_on(
     table.insert(thread.stack, frame)
 end
 
-function frame.current(jvm: t.Jvm): (t.Thread, t.StackFrame?)
+function frame.current(jvm: t.Jvm): (t.Thread?, t.StackFrame?)
     local current_thread = jvm.current_thread
+    if not current_thread then
+        return nil, nil
+    end
     local current_frame = current_thread.stack[#current_thread.stack]
     return current_thread, current_frame
 end

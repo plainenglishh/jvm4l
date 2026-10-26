@@ -8,6 +8,8 @@ local frame = require("./frame")
 ]=]
 local function invoke_inline(jvm: t.Jvm, method: dispatcher.DispatchedMethodHandle, args: { t.JvmValue })
     local thread = jvm.current_thread
+    assert(thread)
+
     local stack = thread.stack
     local this_frame = stack[#stack]
     if not this_frame or this_frame.code.kind == "native" then
@@ -88,9 +90,7 @@ end
 @native
 local function step(jvm: t.Jvm)
     local thread, f = frame.current(jvm)
-    if not f then
-        error("expected frame") -- shouldve been caught by scheduler.
-    end
+    assert(thread and f)
 
     local method = f.method
 
@@ -165,7 +165,7 @@ local function step(jvm: t.Jvm)
 
         f.pc = start_pc + offset
     else
-        jvm:throw_exception("java/lang/InternalError", `invalid opcode {op}`)
+        jvm:internal_error(string.format("unimplemented opcode 0x%02X", op), nil, true)
     end
 end
 

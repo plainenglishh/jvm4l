@@ -5,7 +5,7 @@
 ## Short Term Goals
 
 - [ ] threading:
-    - [ ] current_thread no longer always set, create ephemeral thread for host side :invoke if none are set
+    - [X] current_thread no longer always set, create ephemeral thread for host side :invoke if none are set
     - [ ] ability to create new threads with runnable targets/main class
     - [ ] proper scheduling
     - [ ] monitorenter/exit

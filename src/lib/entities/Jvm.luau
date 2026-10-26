@@ -200,7 +200,7 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
         },
         _threads = {},
         _next_thread_id = 0,
-        current_thread = (nil :: any) :: t.Thread,
+        current_thread = nil,
         _exec_depth = 0,
         _gc = (nil :: any) :: t.GarbageCollector,
         _interned_strings = {},
@@ -210,7 +210,6 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
 
     self._gc = GarbageCollector._new(self)
     bootstrap_core_classes(self)
-    self.current_thread = self:create_thread(false)
 
     return self
 end
@@ -354,6 +353,14 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
     end
 
     local methods, fields = get_members(self, classfile, defining_loader)
+
+    local source_file: string?
+    local source_file_info = class_parser.get_attribute_info(classfile, classfile.attributes, "SourceFile")
+    if source_file_info then
+        local idx = bit32.rshift(bit32.byteswap(buffer.readu16(source_file_info.data, 0)), 16)
+        source_file = class_parser.utf8_value(classfile, idx)
+    end
+
     local class = JvmClass._prepare(
         self,
         defining_loader,
@@ -363,7 +370,8 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
         methods,
         fields,
         classfile.access_flags,
-        classfile
+        classfile,
+        source_file
     )
     register_class(self, defining_loader, class)
 
@@ -639,8 +647,21 @@ function Jvm.throw_exception(
     error(e, 0) -- Caught by the outer host if async, or the exec engine if inside bytecode
 end
 
-function Jvm.internal_error(self: t.Jvm, message: string, level: number?): never
+function Jvm.internal_error(self: t.Jvm, message: string, level: number?, include_vm_info: boolean?): never
     local traceback = debug.traceback(nil, (level or 1) + 1)
+    local thread = self.current_thread
+    if include_vm_info and thread then
+        local frame = thread.stack[#thread.stack]
+        message ..= ` (thread {thread.id}, frame {#thread.stack}`
+        if not frame then
+            message ..= ")"
+        elseif frame.code.kind == "java" then
+            message ..= `, pc = {frame.start_pc})`
+        elseif frame.code.kind == "luau" then
+            message ..= ", native frame)"
+        end
+    end
+
     local cause =
         self:create_exception("jvm4l/luau/LuauError", message .. "\n    " .. traceback:gsub("\n", "\n    "), nil, true)
     return self:throw_exception("java/lang/InternalError", message, cause)

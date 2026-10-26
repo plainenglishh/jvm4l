@@ -24,12 +24,14 @@ function JvmClass._prepare(
     methods: { t.MethodInfo },
     fields: { t.FieldInfo },
     access_flags: number,
-    classfile: t.Classfile?
+    classfile: t.Classfile?,
+    source_file: string?
 ): t.JvmClass
     local self: t.JvmClass = setmetatable({
         jvm = jvm,
         name = name,
         fqcn = string.gsub(name, "/", "."),
+        package = string.match(name, "(.+)/") or "",
         super = super,
         interfaces = interfaces,
         loader = loader,
@@ -42,6 +44,8 @@ function JvmClass._prepare(
         synthetic = bit32.band(access_flags, 0x1000) ~= 0,
         annotation = bit32.band(access_flags, 0x2000) ~= 0,
         enum = bit32.band(access_flags, 0x4000) ~= 0,
+
+        source_file = source_file,
 
         _methods = methods,
         _fields = fields,
@@ -146,18 +150,19 @@ function JvmClass.implements(self: t.JvmClass, interface: t.JvmClass): boolean
 end
 
 function JvmClass.get_static_field(self: t.JvmClass, field: t.FieldHandle): t.JvmValue
-    assert(self._state ~= "error")
+    self:_ensure_initialised()
     assert(self == field.class or self:inherits_from(field.class))
     return field.class._static_field_values[field]
 end
 
 function JvmClass.set_static_field(self: t.JvmClass, field: t.FieldHandle, value: t.JvmValue)
-    assert(self._state ~= "error")
+    self:_ensure_initialised()
     assert(self == field.class or self:inherits_from(field.class))
     field.class._static_field_values[field] = value
 end
 
 function JvmClass.invoke_static(self: t.JvmClass, method: t.MethodHandle, args: { t.JvmValue }): t.JvmValue
+    self:_ensure_initialised()
     local dispatched_method = execution_engine.dispatch(self.jvm, method, "static", self)
     return execution_engine.invoke_sync(self.jvm, dispatched_method, args)
 end
