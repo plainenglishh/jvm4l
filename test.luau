@@ -49,5 +49,5 @@ local ok, err = pcall(function(...)
     Test:invoke_static(test_ref, {})
 end)
 if not ok then
-    print(`\x1b[31m{err}\x1b[m`)
+    print(`\x1b[31m{jvm4l.display_exception(err :: any)}\x1b[m`)
 end

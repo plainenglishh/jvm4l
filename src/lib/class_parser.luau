@@ -391,4 +391,36 @@ function class_parser.get_code_attribute(classfile: t.Classfile, method: t.CfMet
     }
 end
 
+function class_parser.get_sourcefile_attribute(classfile: t.Classfile): string?
+    local source_file_info = class_parser.get_attribute_info(classfile, classfile.attributes, "SourceFile")
+    if source_file_info then
+        local idx = read_u16be(source_file_info.data, 0)
+        return class_parser.utf8_value(classfile, idx)
+    end
+
+    return nil
+end
+
+function class_parser.get_line_number_table_attribute(
+    classfile: t.Classfile,
+    code: t.CfCodeAttribute
+): t.LineNumberTable?
+    local line_numbers_info = class_parser.get_attribute_info(classfile, code.attributes, "LineNumberTable")
+    if not line_numbers_info then
+        return nil
+    end
+
+    local line_numbers = {}
+
+    local line_number_count = read_u16be(line_numbers_info.data, 0)
+    for i = 1, line_number_count do
+        local offset = ((i - 1) * 4) + 2
+        local start_pc = read_u16be(line_numbers_info.data, offset)
+        local line_number = read_u16be(line_numbers_info.data, offset + 2)
+        table.insert(line_numbers, { start_pc = start_pc, line = line_number })
+    end
+
+    return line_numbers
+end
+
 return class_parser

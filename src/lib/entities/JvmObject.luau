@@ -25,43 +25,9 @@ JvmObject.__type = "JvmObject"
 JvmObject.__index = JvmObject
 
 function JvmObject.__tostring(self: t.JvmObject): string
-    -- at what point should this be deferred to the objects toString impl, if at all?
-    local Throwable = self.jvm:resolve_class("java/lang/Throwable")
-    if not self:instance_of(Throwable) then
-        local bits = bit32.band(self.hash_code, 0xFFFFFFFF)
-        return string.format("<JvmObject: %s@%08x>", self.class.fqcn, bits)
-    end
-
-    local message_ref = self.jvm:resolve_field(Throwable, "message", "Ljava/lang/String;")
-    local message = self:get_field(message_ref) :: t.JvmObjectRef
-    local message_str = ""
-    if message then
-        message_str = `: {message:inner_string()}`
-    end
-
-    local stack_trace = ""
-    if self._magic then
-        assert(self._magic.kind == "throwable")
-        local builder = {}
-
-        for _, frame in self._magic.stack do
-            local path = ""
-            if frame.class.source_file then
-                path = `{frame.class.package}/{frame.class.source_file}`
-            end
-            table.insert(builder, 1, `    at {frame.class.fqcn}.{frame.method.name}({path})`)
-        end
-
-        stack_trace = "\n" .. table.concat(builder, "\n")
-    end
-
-    local cause = self:get_field(self.jvm:resolve_field(Throwable, "cause", "Ljava/lang/Throwable;"))
-    local cause_str = ""
-    if cause then
-        cause_str = "\nCaused by: " .. tostring(cause)
-    end
-
-    return `{self.class.fqcn}{message_str}{stack_trace}{cause_str}`
+    local bits = bit32.band(self.hash_code, 0xFFFFFFFF)
+    return string.format("<JvmObject: %s@%08x>", self.class.fqcn, bits)
+    
 end
 
 function JvmObject.__display(self: t.JvmObject): string

@@ -78,12 +78,15 @@ local function get_members(
                 })
             end
 
+            local line_numbers = class_parser.get_line_number_table_attribute(classfile, code_attribute)
+
             code = {
                 kind = "java",
                 max_stack = code_attribute.max_stack,
                 max_locals = code_attribute.max_locals,
                 code = code_attribute.code,
                 exceptions = exceptions,
+                line_numbers = line_numbers,
             }
         end
 
@@ -353,13 +356,7 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
     end
 
     local methods, fields = get_members(self, classfile, defining_loader)
-
-    local source_file: string?
-    local source_file_info = class_parser.get_attribute_info(classfile, classfile.attributes, "SourceFile")
-    if source_file_info then
-        local idx = bit32.rshift(bit32.byteswap(buffer.readu16(source_file_info.data, 0)), 16)
-        source_file = class_parser.utf8_value(classfile, idx)
-    end
+    local source_file = class_parser.get_sourcefile_attribute(classfile)
 
     local class = JvmClass._prepare(
         self,

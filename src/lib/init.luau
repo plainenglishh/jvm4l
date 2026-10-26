@@ -74,4 +74,62 @@ local jvm4l = {}
 
 jvm4l.Jvm = require("@self/entities/Jvm")
 
+function jvm4l.display_exception(exception: t.JvmObject): string
+    local jvm = exception.jvm
+    local Throwable = jvm:resolve_class("java/lang/Throwable")
+    if not exception:instance_of(Throwable) then
+        return exception:__tostring()
+    end
+
+    local message_ref = jvm:resolve_field(Throwable, "message", "Ljava/lang/String;")
+    local message = exception:get_field(message_ref) :: t.JvmObjectRef
+    local message_str = ""
+    if message then
+        message_str = `: {message:inner_string()}`
+    end
+
+    local stack_trace = ""
+    if exception._magic then
+        assert(exception._magic.kind == "throwable")
+        local builder = {}
+
+        for _, frame in exception._magic.stack do
+            local where: string
+            if frame.method.native then
+                where = "Native Method"
+            elseif frame.class.source_file then
+                where = frame.class.source_file
+
+                if frame.code.kind == "java" and frame.code.line_numbers then
+                    local line = -1
+                    local best_start_pc = -1
+
+                    for i = 1, #frame.code.line_numbers do
+                        local entry = frame.code.line_numbers[i]
+                        if frame.start_pc >= entry.start_pc and entry.start_pc > best_start_pc then
+                            line = entry.line
+                            best_start_pc = entry.start_pc
+                        end
+                    end
+                    where ..= `:{line}`
+                end
+            else
+                where = "Unknown Source"
+            end
+
+            table.insert(builder, 1, `    at {frame.class.fqcn}.{frame.method.name}({where})`)
+        end
+
+        stack_trace = "\n" .. table.concat(builder, "\n")
+    end
+
+    local cause = exception:get_field(jvm:resolve_field(Throwable, "cause", "Ljava/lang/Throwable;"))
+    local cause_str = ""
+    if cause then
+        cause_str = "\nCaused by: " .. jvm4l.display_exception(cause :: t.JvmObject)
+    end
+
+    return `{exception.class.fqcn}{message_str}{stack_trace}{cause_str}`
+end
+
 return jvm4l

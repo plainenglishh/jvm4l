@@ -518,7 +518,10 @@ export type MethodCodeJava = {
     read max_locals: number,
     read code: buffer,
     read exceptions: { ExceptionHandler },
+    read line_numbers: LineNumberTable?,
 }
+
+export type LineNumberTable = { { start_pc: number, line: number } }
 
 export type ExceptionHandler = {
     start_pc: number,
