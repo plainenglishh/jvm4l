@@ -1,3 +1,4 @@
+local dbg = require("../dbg")
 local JvmObject = require("../entities/JvmObject")
 local t = require("../t")
 local frame = require("./frame")
@@ -81,7 +82,7 @@ local function unwind_thread(jvm: t.Jvm, thread: t.Thread, target: t.Invocation,
         end
 
         stack[i] = nil
-        jvm:_trace(`unwound frame #{i} on thread #{thread.id} ({f.class.fqcn}.{f.method.signature})`)
+        dbg.trace(jvm, "unwound frame #%i on thread #%i (%s.%s)", i, thread.id, f.class.fqcn, f.method.signature)
 
         if f.invocation and f.invocation == target then
             return false
@@ -97,7 +98,7 @@ end
 @native
 local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
     jvm._exec_depth += 1
-    jvm:_trace(`entered execution engine #{jvm._exec_depth}`)
+    dbg.trace(jvm, "entered execution engine #%i", jvm._exec_depth)
 
     local target_ok: boolean, target_value: t.JvmValue
     while true do
@@ -133,11 +134,7 @@ local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
         end
     end
 
-    jvm:_trace(
-        `exited execution engine #{jvm._exec_depth} {if target_ok then "" else "un"}successfully with {if target_ok
-            then "value"
-            else "exception"} {if not target_ok then (target_value :: any).class.fqcn else target_value}`
-    )
+    dbg.trace(jvm, 'exited execution engine #%i (success=%*, value="%*")', jvm._exec_depth, target_ok, target_value)
     jvm._exec_depth -= 1
     return target_ok, target_value
 end

@@ -23,4 +23,14 @@ function dbg.dump_stack(jvm: t.Jvm)
     end
 end
 
+function dbg.trace(jvm: t.Jvm, format: string, ...: any)
+    local trace = jvm._settings.trace
+    if not trace then
+        return
+    end
+
+    local message = string.format(format, ...)
+    trace(message)
+end
+
 return dbg

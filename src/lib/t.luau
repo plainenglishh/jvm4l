@@ -127,8 +127,6 @@ export type Jvm = setmetatable<
 
         new: (settings: IntoJvmSettings) -> Jvm,
 
-        _trace: (self: Jvm, message: string) -> (),
-
         create_thread: (self: Jvm, daemon: boolean, runnable: MethodInfo?) -> Thread,
         _interrupt: (self: Jvm) -> (),
 

@@ -1,3 +1,4 @@
+local dbg = require("../dbg")
 local jvm_type = require("../jvm_type")
 local t = require("../t")
 local typechecker = require("../typechecker")
@@ -71,7 +72,14 @@ function frame.push_on(
         } :: t.StackFrame
     end
 
-    jvm:_trace(`pushed frame #{#thread.stack + 1} on thread #{thread.id} ({class.fqcn}.{method_info.signature})`)
+    dbg.trace(
+        jvm,
+        "pushed frame #%i on thread #%i (%s.%s)",
+        #thread.stack + 1,
+        thread.id,
+        class.fqcn,
+        method_info.signature
+    )
 
     table.insert(thread.stack, frame)
 end

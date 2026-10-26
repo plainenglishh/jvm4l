@@ -1,4 +1,5 @@
 local ConstantPool = require("../ConstantPool")
+local dbg = require("../dbg")
 local execution_engine = require("../execution_engine")
 local t = require("../t")
 local JvmObject = require("./JvmObject")
@@ -85,7 +86,7 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
     end
 
     self._state = "initialising"
-    self.jvm:_trace(`initialising class {self.name}`)
+    dbg.trace(self.jvm, "initialising class %s", self.fqcn)
 
     if self.super then
         self.super:_ensure_initialised()

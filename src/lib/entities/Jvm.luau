@@ -6,6 +6,7 @@ local t = require("../t")
 local util = require("../util")
 local GarbageCollector = require("../GarbageCollector")
 local Lazy = require("../Lazy")
+local dbg = require("../dbg")
 local JvmClass = require("./JvmClass")
 
 local Jvm = {}
@@ -217,12 +218,6 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
     return self
 end
 
-function Jvm._trace(self: t.Jvm, message: string)
-    if self._settings.trace then
-        self._settings.trace(message)
-    end
-end
-
 function Jvm._interrupt(self: t.Jvm)
     if self._settings.interrupt then
         self._settings.interrupt(self)
@@ -247,8 +242,7 @@ function Jvm.create_thread(self: t.Jvm, daemon: boolean, runnable: t.MethodInfo?
     end
 
     table.insert(self._threads, thread)
-
-    self:_trace(`created thread #{thread.id}`)
+    dbg.trace(self, "created thread #%i", thread.id)
     return thread
 end
 
@@ -291,7 +285,7 @@ local function get_array_class(self: t.Jvm, name: string, initiating_loader: t.J
     local Object = self._classes.bootstrap["java/lang/Object"]
     local class = JvmClass._prepare(self, defining_loader, name, Object, {}, ARRAY_METHODS, {}, 0x0001)
     register_class(self, defining_loader, class)
-    self:_trace(`created array class {name}`)
+    dbg.trace(self, "created array class %s", name)
     return class
 end
 
@@ -372,7 +366,7 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
     )
     register_class(self, defining_loader, class)
 
-    self:_trace(`loaded class {this_class_name} from loader {defining_loader}`)
+    dbg.trace(self, "loaded class %s from loader %*", this_class_name, defining_loader)
 
     return class
 end

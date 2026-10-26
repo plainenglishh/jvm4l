@@ -8,6 +8,4 @@ function util.unimplemented(note: string?): never
     error(msg, 2)
 end
 
-function util.nop() end
-
 return util
