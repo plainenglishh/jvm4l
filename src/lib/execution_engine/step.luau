@@ -1,5 +1,4 @@
 local t = require("../t")
-local util = require("../util")
 local dispatcher = require("./dispatcher")
 local frame = require("./frame")
 
