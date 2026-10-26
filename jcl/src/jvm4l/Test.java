@@ -1,6 +1,6 @@
 package jvm4l;
 
-import jvm4l.luau.Globals;
+import static jvm4l.luau.Globals.error;
 
 /**
  * Used for testing execution before application class loader is in a usable 
@@ -12,6 +12,6 @@ public class Test {
     }
 
     public static void main() {
-        Globals.error("Hello, World!");
+        error("Hello, World!");
     }
 }

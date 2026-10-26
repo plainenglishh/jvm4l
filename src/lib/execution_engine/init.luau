@@ -24,7 +24,7 @@ end
     Invokes `method` synchronously without performing dispatch logic.
     You must call `execution_engine.dispatch` before this to get the correct method, regardless of dispatch type.
 ]=]
-function execution_engine.invoke_sync(jvm: t.Jvm, method: DispatchedMethodHandle, args: { t.JvmValue }): t.JvmValue
+function execution_engine.invoke_sync(jvm: t.Jvm, method: DispatchedMethodHandle, args: t.Arguments): t.JvmValue
     local thread: t.Thread
     if jvm.current_thread then
         thread = jvm.current_thread

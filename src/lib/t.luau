@@ -96,6 +96,8 @@ export type JvmMethodType = {
     returns: JvmType | "void",
 }
 
+export type Arguments = { n: number, [number]: JvmValue }
+
 --------------------------------------------------------------------------------
 
 --// Entities
@@ -352,13 +354,13 @@ export type JvmClass = setmetatable<
 			Creates a new Object from this class, dynamically selecting a
 			constructor from given values, if one exists.
 		]=]
-        new: (self: JvmClass, constructor: MethodHandle, args: { JvmValue }) -> JvmObject,
+        new: (self: JvmClass, constructor: MethodHandle?, ...JvmValue) -> JvmObject,
 
         inherits_from: (self: JvmClass, other: JvmClass) -> boolean,
         implements: (self: JvmClass, interface: JvmClass) -> boolean,
         get_static_field: (self: JvmClass, field: FieldHandle) -> JvmValue,
         set_static_field: (self: JvmClass, field: FieldHandle, value: JvmValue) -> (),
-        invoke_static: (self: JvmClass, method: MethodHandle, args: { JvmValue }) -> JvmValue,
+        invoke_static: (self: JvmClass, method: MethodHandle, ...JvmValue) -> JvmValue,
 
         -- Reflection
 
@@ -398,14 +400,14 @@ export type JvmObject = setmetatable<
         --[=[
 
 		]=]
-        _initialise: (self: JvmObject, constructor: MethodHandle, args: { JvmValue }) -> (),
+        _initialise: (self: JvmObject, constructor: MethodHandle?, ...JvmValue) -> (),
 
         instance_of: (self: JvmObject, class: JvmClass) -> boolean,
         implements: (self: JvmObject, interface: JvmClass) -> boolean,
 
         get_field: (self: JvmObject, field: FieldHandle) -> JvmValue,
         set_field: (self: JvmObject, field: FieldHandle, value: JvmValue) -> (),
-        invoke: (self: JvmObject, method: MethodHandle, { JvmValue }) -> JvmValue,
+        invoke: (self: JvmObject, method: MethodHandle, ...JvmValue) -> JvmValue,
 
         inner_string: (self: JvmObject) -> string,
         inner_thread: (self: JvmObject) -> Thread,

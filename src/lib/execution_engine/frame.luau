@@ -10,7 +10,7 @@ function frame.push_on(
     thread: t.Thread,
     method: t.MethodHandle,
     invocation: t.Invocation?,
-    args: { t.JvmValue }
+    args: t.Arguments
 )
     local frame: t.StackFrame
     local method_info = method.info

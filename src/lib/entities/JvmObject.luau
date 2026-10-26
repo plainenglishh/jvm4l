@@ -62,8 +62,12 @@ function JvmObject._new(jvm: t.Jvm, class: t.JvmClass, magic: t._MagicValue?): t
     return self
 end
 
-function JvmObject._initialise(self: t.JvmObject, constructor: t.MethodHandle, args: { t.JvmValue })
-    util.unimplemented()
+function JvmObject._initialise(self: t.JvmObject, constructor: t.MethodHandle?, ...: t.JvmValue)
+    local args = table.pack(...)
+    table.insert(args, 1, self)
+    local constructor = constructor or self.jvm:resolve_method(self.class, "<init>", "()V")
+    local dispatched_constructor = execution_engine.dispatch(self.jvm, constructor, "special", self.class, self)
+    execution_engine.invoke_sync(self.jvm, dispatched_constructor, args)
 end
 
 function JvmObject.instance_of(self: t.JvmObject, class: t.JvmClass): boolean
@@ -87,8 +91,8 @@ function JvmObject.set_field(self: t.JvmObject, field: t.FieldHandle, value: t.J
     self._field_values[field] = value
 end
 
-function JvmObject.invoke(self: t.JvmObject, method: t.MethodHandle, args: {t.JvmValue}): t.JvmValue
-    local args = table.clone(args)
+function JvmObject.invoke(self: t.JvmObject, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
+    local args: t.Arguments = table.pack(...)
     table.insert(args, 1, self)
     local dispatched_method = execution_engine.dispatch(self.jvm, method, "virtual", self.class, self)
     return execution_engine.invoke_sync(self.jvm, dispatched_method, args)

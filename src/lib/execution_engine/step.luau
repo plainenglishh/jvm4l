@@ -7,7 +7,7 @@ local frame = require("./frame")
     Invokes `method` inline without performing dispatch logic.
     You must call `dispatcher.dispatch` before this to get the correct method, regardless of dispatch type.
 ]=]
-local function invoke_inline(jvm: t.Jvm, method: dispatcher.DispatchedMethodHandle, args: { t.JvmValue })
+local function invoke_inline(jvm: t.Jvm, method: dispatcher.DispatchedMethodHandle, args: t.Arguments)
     local thread = jvm.current_thread
     assert(thread)
 
@@ -277,11 +277,12 @@ local function step(jvm: t.Jvm)
 
         local method = k:get(idx, "method")
         local arg_count = #method.info.type:get().arguments
-        local args: { any } = table.create(arg_count)
+        local args = table.create(arg_count) :: t.Arguments
         for _ = 1, arg_count do
             local v = pop(f, "any")
             table.insert(args, 1, v)
         end
+        args.n = arg_count
         local dispatched_method = dispatcher.dispatch(jvm, method, "static", class)
         invoke_inline(jvm, dispatched_method, args)
     elseif op == 0xAC then -- ireturn

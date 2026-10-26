@@ -102,7 +102,7 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
     if self:get_method("<clinit>", "()V") then
         local clinit = self.jvm:resolve_method(self, "<clinit>", "()V")
         local dispatched_clinit = execution_engine.dispatch(self.jvm, clinit, "static", self)
-        execution_engine.invoke_sync(self.jvm, dispatched_clinit, {})
+        execution_engine.invoke_sync(self.jvm, dispatched_clinit, { n = 0 })
     end
 
     self._state = "initialised"
@@ -113,12 +113,9 @@ function JvmClass._new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t
     return JvmObject._new(self.jvm, self, magic)
 end
 
-function JvmClass.new(self: t.JvmClass, constructor: t.MethodHandle, args: { t.JvmValue }): t.JvmObject
+function JvmClass.new(self: t.JvmClass, constructor: t.MethodHandle?, ...: t.JvmValue): t.JvmObject
     local o = self:_new_uninitialised()
-    local args = table.clone(args)
-    table.insert(args, 1, o)
-    local dispatched_constructor = execution_engine.dispatch(self.jvm, constructor, "special", self)
-    execution_engine.invoke_sync(self.jvm, dispatched_constructor, args)
+    o:_initialise(constructor, ...)
     return o
 end
 
@@ -162,8 +159,9 @@ function JvmClass.set_static_field(self: t.JvmClass, field: t.FieldHandle, value
     field.class._static_field_values[field] = value
 end
 
-function JvmClass.invoke_static(self: t.JvmClass, method: t.MethodHandle, args: { t.JvmValue }): t.JvmValue
+function JvmClass.invoke_static(self: t.JvmClass, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
     self:_ensure_initialised()
+    local args: t.Arguments = table.pack(...)
     local dispatched_method = execution_engine.dispatch(self.jvm, method, "static", self)
     return execution_engine.invoke_sync(self.jvm, dispatched_method, args)
 end

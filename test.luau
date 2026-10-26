@@ -1,21 +1,21 @@
 print("-----")
 local jvm4l = require("./src/lib")
 
-local function link_native(class_name: string, method_name: string): jvm4l.NativeMethod?
-    if class_name == "jvm4l/Test" and method_name == "print_int:(I)V" then
+local function link_native(class_name: string, signature: string): jvm4l.NativeMethod?
+    if class_name == "jvm4l/Test" and signature == "print_int:(I)V" then
         return function(jvm: jvm4l.Jvm, value)
             print(value)
             return nil
         end
-    elseif class_name == "jvm4l/Test" and method_name == "error:()V" then
+    elseif class_name == "jvm4l/Test" and signature == "error:()V" then
         return function(jvm: jvm4l.Jvm)
             error("error was called!")
         end
-    elseif class_name == "jvm4l/Test" and method_name == "calls_error_wrapper:()V" then
+    elseif class_name == "jvm4l/Test" and signature == "calls_error_wrapper:()V" then
         return function(jvm: jvm4l.Jvm)
             local Test = jvm:resolve_class("jvm4l/Test")
             local error_wrapper = jvm:resolve_method(Test, "error_wrapper", "()V")
-            Test:invoke_static(error_wrapper, {})
+            Test:invoke_static(error_wrapper)
             return nil
         end
     end
@@ -44,16 +44,16 @@ local vm = jvm4l.Jvm.new({
 --print(vm:resolve_class("jvm4l/Luau"))
 
 local ok, err = pcall(function(...)
-    --local Test = vm:resolve_class("jvm4l/Test")
-    --local test_ref = vm:resolve_method(Test, "main", "()V")
-    --Test:invoke_static(test_ref, {})
+    local Test = vm:resolve_class("jvm4l/Test")
+    local test_ref = vm:resolve_method(Test, "main", "()V")
+    Test:invoke_static(test_ref)
 
-    local Object = vm:resolve_class("java/lang/Object")
-    local hashCode = vm:resolve_method(Object, "hashCode", "()I")
-    local o = Object:_new_uninitialised()
-    local hc = o:invoke(hashCode, {})
-    print(hc)
+    --local Double = vm:resolve_class("java/lang/Double")
+    --local hashCode = vm:resolve_method(Double, "hashCode", "()I")
+    --local obj = Double:_new_uninitialised()
+    --print(obj:invoke(hashCode))
 end)
+
 if not ok then
     print(`\x1b[31m{jvm4l.display_exception(err :: any)}\x1b[0m`)
 end

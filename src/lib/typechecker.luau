@@ -69,11 +69,11 @@ end
 
     Will resolve types.
 ]=]
-function typechecker.check_method(jvm: t.Jvm, values: { t.JvmValue }, class: t.JvmClass, target: t.MethodInfo): boolean
+function typechecker.check_method(jvm: t.Jvm, values: t.Arguments, class: t.JvmClass, target: t.MethodInfo): boolean
     local method_type = target.type:get()
     local static = target.static
 
-    if #values ~= #method_type.arguments + if static then 0 else 1 then
+    if values.n ~= #method_type.arguments + if static then 0 else 1 then
         return false
     end
 
