@@ -35,4 +35,9 @@
     - [ ] delete objects by calling its finaliser (which can prevent deletion), and dropping the object from the GC tracking table to allow the Luau GC to properly deallocate it
 - [ ] Complete all opcodes
 - [ ] Magic luau interop classes (maybe even don't treat java/lang/String as a magic class, but back it with a magic jvl4/luau/String?)
-- [ ] JIT (transpile java bytecode to luau source, pass to a host provided `load` function)
+- [ ] JIT
+    - transpile java bytecode into luau source code to be loaded by a host provided 'load' function.
+    - split into basic blocks, use trampoline for gotos
+    - tailor output for native codegen, and return 'status' tokens for stuff like budget exhaustion, monitor waits, etc
+    - treeshake top level functions (e.g. `pop`)
+- [ ] Bytecode verification
