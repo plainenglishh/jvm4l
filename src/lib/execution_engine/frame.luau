@@ -37,8 +37,8 @@ function frame.push_on(
             local val = args[current_arg]
             locals[current_local] = val
 
-            local slots = jvm_type.slots_of(arg)
-            if slots == "2" then
+            local words = jvm_type.words(arg)
+            if words == 2 then
                 locals[current_local] = nil -- holes are fine here
             end
 
@@ -52,7 +52,7 @@ function frame.push_on(
             loader = class.loader,
             code = method_info.code,
             stack = table.create(method_info.code.max_stack),
-            stack_top = 0,
+            sp = 0,
             locals = locals,
             pc = 0,
             start_pc = 0,

@@ -107,12 +107,12 @@ function jvm_type.type_to_descriptor(ty: t.JvmType): string
     end
 end
 
-function jvm_type.slots_of(ty: t.JvmType): "1" | "2"
+function jvm_type.words(ty: t.JvmType): number
     if ty == "long" or ty == "double" then
-        return "2"
+        return 2
     end
 
-    return "1"
+    return 1
 end
 
 return jvm_type

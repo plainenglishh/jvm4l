@@ -233,27 +233,29 @@ export type Thread = {
 export type ThreadState = "new" | "runnable" | "blocked" | "waiting" | "timed_waiting" | "terminated"
 
 --- Representation of a single stack frame.
-export type StackFrame =
-    {
-        method: MethodInfo,
-        class: JvmClass,
-        loader: JvmObjectRef,
-        code: MethodCodeJava,
-        stack: { JvmValue },
-        stack_top: number,
-        locals: { JvmValue },
-        pc: number,
-        start_pc: number,
-        invocation: Invocation?,
-    }
-    | {
-        method: MethodInfo,
-        class: JvmClass,
-        loader: JvmObjectRef,
-        code: MethodCodeLuau,
-        args: { JvmValue },
-        invocation: Invocation?,
-    }
+export type StackFrame = StackFrameJava | StackFrameLuau
+
+export type StackFrameJava = {
+    method: MethodInfo,
+    class: JvmClass,
+    loader: JvmObjectRef,
+    code: MethodImplJava,
+    stack: { JvmValue },
+    locals: { JvmValue },
+    sp: number,
+    pc: number,
+    start_pc: number,
+    invocation: Invocation?,
+}
+
+export type StackFrameLuau = {
+    method: MethodInfo,
+    class: JvmClass,
+    loader: JvmObjectRef,
+    code: MethodImplLuau,
+    args: { JvmValue },
+    invocation: Invocation?,
+}
 
 --- Invocation token used as executor targets to get method return values synchronously.
 export type Invocation =
@@ -569,12 +571,12 @@ export type NativeMethod = (jvm: Jvm, ...JvmValue) -> JvmValue
 	This is independent of the `native` and `abstract` flags, a non-native 
     synthetic method may be implemented with a luau closure, and vice versa.
 ]=]
-export type MethodCode = MethodCodeLuau | MethodCodeJava | MethodCodeAbstract
+export type MethodCode = MethodImplLuau | MethodImplJava | MethodCodeAbstract
 
 --[=[
     A Luau (native) implementation of a method.
 ]=]
-export type MethodCodeLuau = {
+export type MethodImplLuau = {
     read kind: "luau",
     read closure: NativeMethod,
 }
@@ -582,7 +584,7 @@ export type MethodCodeLuau = {
 --[=[
     A Java (bytecode) implementation of a method.
 ]=]
-export type MethodCodeJava = {
+export type MethodImplJava = {
     read kind: "java",
     read max_stack: number,
     read max_locals: number,

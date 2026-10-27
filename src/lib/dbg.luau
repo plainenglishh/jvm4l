@@ -52,4 +52,42 @@ function dbg.trace(jvm: t.Jvm, format: string, ...: any)
     trace(message)
 end
 
+function dbg.luau_stack_depth(start_level: number?): number
+    local i = start_level or 1
+    while debug.info(i, "f") do
+        i += 1
+    end
+    return i - 1
+end
+
+function dbg.luau_scoped_traceback(start_level: number, target_depth: number): string
+    local current_depth = dbg.luau_stack_depth()
+    local start_frame = start_level + 1
+    local stop_frame = current_depth - target_depth
+
+    if stop_frame < start_frame then
+        stop_frame = current_depth
+    end
+
+    local out = {}
+
+    for i = start_frame, stop_frame do
+        local s, l, n = debug.info(i, "sln")
+        if not s then
+            break
+        end
+        if l == -1 then
+            continue
+        end
+
+        if n ~= "" then
+            n = ` function {n}`
+        end
+
+        table.insert(out, `    {s}:{l}{n}`)
+    end
+
+    return table.concat(out, "\n")
+end
+
 return dbg
