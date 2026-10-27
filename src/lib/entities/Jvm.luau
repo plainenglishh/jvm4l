@@ -23,8 +23,8 @@ function Jvm.__display(self: t.Jvm): string
 end
 
 local function link_native(self: t.Jvm, class_name: string, signature: string): t.NativeMethod?
-    return (native_methods[class_name] and native_methods[class_name][signature])
-        or self._settings.link_native(class_name, signature)
+    return self._settings.link_native(class_name, signature)
+        or (native_methods[class_name] and native_methods[class_name][signature])
 end
 
 local function get_members(
