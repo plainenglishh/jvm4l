@@ -163,28 +163,16 @@ local function coerce_error(jvm: t.Jvm, e: unknown, invoke_depth: number): t.Jvm
     return jvm:create_exception("jvm4l/luau/LuauError", `{message}\n{traceback}`, nil, false)
 end
 
-local function fetch_u8(f: t.StackFrameJava): number
-    local value = buffer.readu8(f.code.code, f.pc)
-    f.pc += 1
-    return value
-end
-
-local function fetch_u16(f: t.StackFrameJava): number
-    local value = read_u16be(f.code.code, f.pc)
-    f.pc += 2
-    return value
-end
-
-local function SIGN_EXTEND_BYTE(byte: number): number
+local function sign_extend_byte(byte: number): number
     return if byte >= 0x80 then byte - 0x100 else byte
 end
 
-local function SIGN_EXTEND_SHORT(short: number): number
+local function sign_extend_short(short: number): number
     return if short >= 0x8000 then short - 0x10000 else short
 end
 
 --- compares `int`, `float` and `double
-local function COND_IF(cond: number, v1: number, v2: number)
+local function conf_if(cond: number, v1: number, v2: number): boolean
     if cond == 0 then
         return v1 == v2
     elseif cond == 1 then
@@ -235,19 +223,34 @@ local function step(jvm: t.Jvm)
 
     local class = f.class
     local k = f.constants
+    local code = f.code.code
+    local pc = f.pc -- only needs to be cached at the end, doesnt matter for exceptions, as that uses start_pc and sets pc, never reads it!
+
+    local function fetch_u8(): number
+        local value = buffer.readu8(code, pc)
+        pc += 1
+        return value
+    end
+
+    local function fetch_u16(): number
+        local value = read_u16be(code, pc)
+        pc += 2
+        return value
+    end
 
     local burst_initial_depth = #thread.stack
     local burst_count = 100 -- use budget later
-    for i = 1, burst_count do
-        local start_pc = f.pc
-        f.start_pc = start_pc
 
-        local op = fetch_u8(f)
+    for i = 1, burst_count do
+        local start_pc = pc
+        f.start_pc = start_pc -- cache now because its used for debugging
+
+        local op = fetch_u8()
 
         local wide = false
         if op == 0xC4 then -- wide
             wide = true
-            op = fetch_u8(f)
+            op = fetch_u8()
         end
 
         if wide and not supports_wide(op) then
@@ -276,14 +279,14 @@ local function step(jvm: t.Jvm)
             local value: number
 
             if op == 0x10 then -- `bipush`
-                value = SIGN_EXTEND_BYTE(fetch_u8(f))
+                value = sign_extend_byte(fetch_u8())
             elseif op == 0x11 then -- `sipush`
-                value = SIGN_EXTEND_SHORT(fetch_u16(f))
+                value = sign_extend_short(fetch_u16())
             end
 
             push(f, value, 1)
         elseif op == 0x12 then -- `ldc`
-            local idx = fetch_u8(f)
+            local idx = fetch_u8()
             local value: t.JvmValue
 
             if k:is(idx, "int") then
@@ -316,28 +319,28 @@ local function step(jvm: t.Jvm)
             local value = pop(f, 1)
             set_local(f, idx, value)
         elseif op == 0x84 then -- `iinc`
-            local idx = fetch_u8(f)
-            local const = SIGN_EXTEND_BYTE(fetch_u8(f))
+            local idx = fetch_u8()
+            local const = sign_extend_byte(fetch_u8())
             local value = get_local(f, idx) :: number
             value += const
             set_local(f, idx, value)
         elseif op >= 0x9F and op <= 0xA4 then -- `if_icmp<cond>`
             local cond = op - 0x9F
-            local offset = SIGN_EXTEND_SHORT(fetch_u16(f))
+            local offset = sign_extend_short(fetch_u16())
             local value2, value1 = pop(f, 1) :: number, pop(f, 1) :: number
 
-            local taken = COND_IF(cond, value1, value2)
+            local taken = conf_if(cond, value1, value2)
             if taken then
-                f.pc = start_pc + offset
+                pc = start_pc + offset
             end
         elseif op == 0xB5 then -- `putfield`
-            local idx = fetch_u16(f)
+            local idx = fetch_u16()
             local field = k:get(idx, "field")
             local value = pop(f)
             local object = not_null(jvm, pop(f) :: t.JvmObjectRef)
             object:set_field(field, value)
         elseif op == 0xB7 then -- `invokespecial`
-            local idx = fetch_u16(f)
+            local idx = fetch_u16()
             local method = k:get(idx, "method")
             local arg_count = #method.info.type:get().arguments + 1
             local args = pop_n(f, arg_count, true) :: t.Arguments
@@ -345,7 +348,7 @@ local function step(jvm: t.Jvm)
             local dispatched_method = dispatcher.dispatch(jvm, method, "special", class)
             invoke_inline(jvm, dispatched_method, args)
         elseif op == 0xB8 then -- `invokestatic`
-            local idx = fetch_u16(f)
+            local idx = fetch_u16()
             local method = k:get(idx, "method")
             local arg_count = #method.info.type:get().arguments
             local args = pop_n(f, arg_count, true) :: t.Arguments
@@ -359,8 +362,8 @@ local function step(jvm: t.Jvm)
         elseif op == 0xB1 then -- `return`
             frame.return_from_current_frame(jvm, thread, 0, nil)
         elseif op == 0xA7 then -- `goto`
-            local offset = SIGN_EXTEND_SHORT(fetch_u16(f))
-            f.pc = start_pc + offset
+            local offset = sign_extend_short(fetch_u16())
+            pc = start_pc + offset
         else
             jvm:_internal_error(string.format("unimplemented opcode 0x%02X", op))
         end
@@ -369,6 +372,8 @@ local function step(jvm: t.Jvm)
             break
         end
     end
+
+    f.pc = pc
 end
 
 return step
