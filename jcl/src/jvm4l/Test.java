@@ -11,7 +11,13 @@ public class Test {
         throw new AssertionError();
     }
 
+    public static native void print_int(int value);
+
     public static void main() {
-        error("Hello, World!");
+        int i = 0;
+        while (i < 1000000) {
+            i++;
+        }
+        print_int(i);
     }
 }

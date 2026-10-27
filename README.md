@@ -2,9 +2,13 @@
 
 An experimental pure-Luau implementation of a Java 8 Virtual Machine.
 
-> [!CAUTION]
+> [!WARNING]
 > Use for experimentation only. The vast majority of features are unimplemented. 
 > For the love of god, please do not use this in serious projects.
+
+> [!CAUTION]
+> Jvm4L currently lacks a bytecode verifier. Only use classfiles generated using
+> an official Java compiler.
 
 ## About
 

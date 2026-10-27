@@ -48,16 +48,9 @@ local vm = jvm4l.Jvm.new({
 --print(vm:load_class("jvm4l/Luau"))
 
 local ok, err = pcall(function(...)
-    --local Test = vm:load_class("jvm4l/Test")
-    --local test_ref = Test:resolve_method("main", "()V")
-    --Test:invoke_static(test_ref)
-
-    --local Double = vm:load_class("java/lang/Double")
-    --local hashCode = vm:resolve_method(Double, "hashCode", "()I")
-    --local obj = Double:_new_uninitialised()
-    --print(obj:invoke(hashCode))
-
-    vm:run("Test")
+    local Test = vm:load_class("jvm4l/Test")
+    local test_ref = Test:resolve_method("main", "()V")
+    Test:invoke_static(test_ref)
 end)
 
 if not ok then

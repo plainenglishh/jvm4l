@@ -91,12 +91,16 @@ function typechecker.check_method(jvm: t.Jvm, values: t.Arguments, class: t.JvmC
         end
 
         if not typechecker.check_value(values[1], class) then
+            print("wrong this")
+
             return false
         end
     end
 
     for i = arg_start, #method_type.arguments do
         if not typechecker.check_value(values[i], method_type.arguments[i]) then
+            print("wrong arg", 1, values[i], method_type.arguments[i])
+
             return false
         end
     end

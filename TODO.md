@@ -26,18 +26,32 @@
 - [X] Method calling & execution engine
 - [X] Strings
 - [X] Arrays
+- [ ] Complete minimal opcode set:
+    - [X] `nop`
+    - [X] `aconst_null`, `aconst_<n>`, `lconst_<n>`, `fconst_<n>`, `dconst_<n>`, `bipush`, `sipush`, `ldc`
+    - [X] `aload_i`, `astore_i`
+    - [X] `putfield`, `getfield`, `putstatic`, `getstatic`
+    - [X] `invokespecial`, `invokestatic`
+    - [X] `return`, `ireturn`, `areturn`, `freturn`, `lreturn`, `dreturn`
+    - [X] `goto`
+    - [ ] `iadd`, `isub`, `iinc`
+    - [ ] `if_icmpge`, `ifeq`
+    - [ ] `new`
 
-## Long Term Goals
-
-- [ ] GC
-    - [X] track all JvmObjects
-    - [ ] trace references (inc. weak references), and mark unreachable objects for deletion
-    - [ ] delete objects by calling its finaliser (which can prevent deletion), and dropping the object from the GC tracking table to allow the Luau GC to properly deallocate it
-- [ ] Complete all opcodes
-- [ ] Magic luau interop classes (maybe even don't treat java/lang/String as a magic class, but back it with a magic jvl4/luau/String?)
-- [ ] JIT
+invokevirtual
+- [ ] proof of concept JIT
     - transpile java bytecode into luau source code to be loaded by a host provided 'load' function.
     - split into basic blocks, use trampoline for gotos
     - tailor output for native codegen, and return 'status' tokens for stuff like budget exhaustion, monitor waits, etc
     - treeshake top level functions (e.g. `pop`)
+    - preserve line info by setting start_pc before fallible operations
+- [ ] GC
+    - [X] track all JvmObjects
+    - [ ] trace references (inc. weak references), and mark unreachable objects for deletion
+    - [ ] delete objects by calling its finaliser (which can prevent deletion), and dropping the object from the GC tracking table to allow the Luau GC to properly deallocate it
+
+## Long Term Goals
+
+- [ ] Magic luau interop classes (maybe even don't treat java/lang/String as a magic class, but back it with a magic jvl4/luau/String?)
+- [ ] Complete all opcodes
 - [ ] Bytecode verification
