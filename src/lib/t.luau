@@ -236,25 +236,26 @@ export type ThreadState = "new" | "runnable" | "blocked" | "waiting" | "timed_wa
 export type StackFrame = StackFrameJava | StackFrameLuau
 
 export type StackFrameJava = {
-    method: MethodInfo,
-    class: JvmClass,
-    loader: JvmObjectRef,
-    code: MethodImplJava,
-    stack: { JvmValue },
-    locals: { JvmValue },
+    read kind: "java",
+    read method: MethodInfo,
+    read class: JvmClass,
+    read constants: ConstantPool,
+    read code: MethodCodeJava,
+    read stack: { JvmValue },
+    read locals: { JvmValue },
     sp: number,
     pc: number,
     start_pc: number,
-    invocation: Invocation?,
+    read invocation: Invocation?,
 }
 
 export type StackFrameLuau = {
-    method: MethodInfo,
-    class: JvmClass,
-    loader: JvmObjectRef,
-    code: MethodImplLuau,
-    args: { JvmValue },
-    invocation: Invocation?,
+    read kind: "luau",
+    read method: MethodInfo,
+    read class: JvmClass,
+    read code: MethodCodeLuau,
+    read args: { JvmValue },
+    read invocation: Invocation?,
 }
 
 --- Invocation token used as executor targets to get method return values synchronously.
@@ -571,12 +572,12 @@ export type NativeMethod = (jvm: Jvm, ...JvmValue) -> JvmValue
 	This is independent of the `native` and `abstract` flags, a non-native 
     synthetic method may be implemented with a luau closure, and vice versa.
 ]=]
-export type MethodCode = MethodImplLuau | MethodImplJava | MethodCodeAbstract
+export type MethodCode = MethodCodeLuau | MethodCodeJava | MethodCodeAbstract
 
 --[=[
     A Luau (native) implementation of a method.
 ]=]
-export type MethodImplLuau = {
+export type MethodCodeLuau = {
     read kind: "luau",
     read closure: NativeMethod,
 }
@@ -584,7 +585,7 @@ export type MethodImplLuau = {
 --[=[
     A Java (bytecode) implementation of a method.
 ]=]
-export type MethodImplJava = {
+export type MethodCodeJava = {
     read kind: "java",
     read max_stack: number,
     read max_locals: number,

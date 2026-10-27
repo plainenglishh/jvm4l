@@ -47,26 +47,27 @@ function frame.push_on(
         end
 
         frame = {
+            kind = "java",
             method = method_info,
             class = class,
-            loader = class.loader,
+            constants = class._constant_pool or error("class has no constant pool"),
             code = method_info.code,
-            stack = table.create(method_info.code.max_stack),
-            sp = 0,
+            stack = table.create(method_info.code.max_stack, nil) :: { t.JvmValue },
             locals = locals,
+            sp = 0,
             pc = 0,
             start_pc = 0,
             invocation = invocation,
-        } :: t.StackFrame
+        }
     elseif method_info.code.kind == "luau" then
         frame = {
+            kind = "luau",
             method = method_info,
             class = class,
-            loader = class.loader,
             code = method_info.code,
             args = args,
             invocation = invocation,
-        } :: t.StackFrame
+        }
     end
 
     dbg.trace(
@@ -78,7 +79,7 @@ function frame.push_on(
         method_info.signature
     )
 
-    table.insert(thread.stack, frame)
+    table.insert(thread.stack, frame :: t.StackFrame)
 end
 
 function frame.current(jvm: t.Jvm): (t.Thread?, t.StackFrame?)

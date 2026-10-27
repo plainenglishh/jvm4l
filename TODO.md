@@ -33,6 +33,6 @@
     - [X] track all JvmObjects
     - [ ] trace references (inc. weak references), and mark unreachable objects for deletion
     - [ ] delete objects by calling its finaliser (which can prevent deletion), and dropping the object from the GC tracking table to allow the Luau GC to properly deallocate it
-- [ ] Ability to create threads with runnable targets
 - [ ] Complete all opcodes
 - [ ] Magic luau interop classes (maybe even don't treat java/lang/String as a magic class, but back it with a magic jvl4/luau/String?)
+- [ ] JIT (transpile java bytecode to luau source, pass to a host provided `load` function)

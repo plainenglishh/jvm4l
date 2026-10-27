@@ -226,7 +226,7 @@ local function step(jvm: t.Jvm)
     end
 
     local class = f.class
-    local k = f.class._constant_pool or error("expected constant pool")
+    local k = f.constants
 
     local start_pc = f.pc
     f.start_pc = start_pc
