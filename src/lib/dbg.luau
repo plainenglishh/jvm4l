@@ -31,12 +31,12 @@ function dbg.vm_info(jvm: t.Jvm): string
 
     local frame = thread.stack[#thread.stack]
     local message = `thread={thread.id}, frame={#thread.stack}`
-    if not frame then
-        message ..= ")"
-    elseif frame.code.kind == "java" then
-        message ..= `, native=false, pc={frame.start_pc})`
-    elseif frame.code.kind == "luau" then
-        message ..= ", native=true)"
+    if frame then
+        if frame.code.kind == "java" then
+            message ..= `, native=false, pc={frame.start_pc}`
+        elseif frame.code.kind == "luau" then
+            message ..= ", native=true"
+        end
     end
 
     return message

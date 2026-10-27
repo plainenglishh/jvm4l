@@ -13,10 +13,14 @@ local function link_native(class_name: string, signature: string): jvm4l.NativeM
         end
     elseif class_name == "jvm4l/Test" and signature == "calls_error_wrapper:()V" then
         return function(jvm: jvm4l.Jvm)
-            local Test = jvm:resolve_class("jvm4l/Test")
+            local Test = jvm:load_class("jvm4l/Test")
             local error_wrapper = Test:resolve_method("error_wrapper", "()V")
             Test:invoke_static(error_wrapper)
             return nil
+        end
+    elseif class_name == "jvm4l/ApplicationClassLoader" and signature == "findClassBytes:(Ljava/lang/String;)[B" then
+        return function(jvm: jvm4l.Jvm, name: jvm4l.JvmValue): jvm4l.JvmValue
+            error("unimplemented")
         end
     end
 
@@ -32,7 +36,7 @@ local vm = jvm4l.Jvm.new({
     end,
 })
 
---local Object = vm:resolve_class("java/lang/Object")
+--local Object = vm:load_class("java/lang/Object")
 --local array = vm:create_array(Object, {
 --    Object:new_uninitialised(),
 --    Object:new_uninitialised(),
@@ -41,17 +45,19 @@ local vm = jvm4l.Jvm.new({
 --    Object:new_uninitialised(),
 --})
 --print(array:get_array_elements())
---print(vm:resolve_class("jvm4l/Luau"))
+--print(vm:load_class("jvm4l/Luau"))
 
 local ok, err = pcall(function(...)
-    local Test = vm:resolve_class("jvm4l/Test")
-    local test_ref = Test:resolve_method("main", "()V")
-    Test:invoke_static(test_ref)
+    --local Test = vm:load_class("jvm4l/Test")
+    --local test_ref = Test:resolve_method("main", "()V")
+    --Test:invoke_static(test_ref)
 
-    --local Double = vm:resolve_class("java/lang/Double")
+    --local Double = vm:load_class("java/lang/Double")
     --local hashCode = vm:resolve_method(Double, "hashCode", "()I")
     --local obj = Double:_new_uninitialised()
     --print(obj:invoke(hashCode))
+
+    vm:run("Test")
 end)
 
 if not ok then

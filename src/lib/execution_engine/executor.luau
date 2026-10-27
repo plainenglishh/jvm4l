@@ -97,7 +97,7 @@ local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
             if is_throwable(value, "java/lang/Throwable") then
                 return value :: t.JvmObject
             else
-                return jvm:create_internal_error(tostring(value), 2)
+                return jvm:_create_internal_error(tostring(value), 2)
             end
         end, jvm)
 

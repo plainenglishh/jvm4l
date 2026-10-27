@@ -37,7 +37,7 @@ function execution_engine.invoke_sync(jvm: t.Jvm, method: DispatchedMethodHandle
     local stack = thread.stack
     local this_frame = stack[#stack]
     if this_frame and this_frame.code.kind == "java" then
-        jvm:internal_error("attempt to use `execution_engine.invoke_sync` in Java context, use invoke_inline")
+        jvm:_internal_error("attempt to use `execution_engine.invoke_sync` in Java context, use invoke_inline")
         error("^")
     end
 

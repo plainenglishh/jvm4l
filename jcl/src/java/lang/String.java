@@ -1,5 +1,6 @@
 package java.lang;
 
 public class String {
-    //private jvm4.luau.String inner; < would be cool!
+    public native String replace(String match, String replacement);
+    public native String concat(String str);
 }

@@ -41,10 +41,10 @@ function jvm_type.resolve_field_descriptor(
         end
 
         local name = string.sub(descriptor, start + 1, i - 1)
-        return jvm:resolve_class(name), i + 1
+        return jvm:load_class(name), i + 1
     elseif first_char == "[" then
         local _, new_i = jvm_type.resolve_field_descriptor(jvm, descriptor, loader, i + 1)
-        return jvm:resolve_class(string.sub(descriptor, i + 1, new_i - 1), loader), new_i
+        return jvm:load_class(string.sub(descriptor, i + 1, new_i - 1), loader), new_i
     else
         error("invalid descriptor")
     end

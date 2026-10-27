@@ -3,10 +3,6 @@
 local t = require("@self/t")
 
 --EXPORT_BEGIN
-export type Lazy<T> = t.Lazy<T>
-export type ConstantValueType = t.ConstantValueType
-export type ConstantValue = t.ConstantValue
-export type ConstantPool = t.ConstantPool
 export type JvmInt = t.JvmInt
 export type JvmFloat = t.JvmFloat
 export type JvmLong = t.JvmLong
@@ -19,6 +15,9 @@ export type JvmValue = t.JvmValue
 export type IntoJvmValue = t.IntoJvmValue
 export type JvmType = t.JvmType
 export type JvmMethodType = t.JvmMethodType
+export type Arguments = t.Arguments
+export type Monitor = t.Monitor
+export type Lazy<T> = t.Lazy<T>
 export type Jvm = t.Jvm
 export type IntoJvmSettings = t.IntoJvmSettings
 export type LinkNativeCallback = t.LinkNativeCallback
@@ -26,14 +25,15 @@ export type InterruptCallback = t.InterruptCallback
 export type TraceCallback = t.TraceCallback
 export type JvmClassLoader = t.JvmClassLoader
 export type GarbageCollector = t.GarbageCollector
-export type GcFinalise = t.GcFinalise
 export type Thread = t.Thread
 export type ThreadState = t.ThreadState
 export type StackFrame = t.StackFrame
 export type Invocation = t.Invocation
-export type Monitor = t.Monitor
 export type JvmClass = t.JvmClass
 export type JvmClassState = t.JvmClassState
+export type ConstantValueType = t.ConstantValueType
+export type ConstantValue = t.ConstantValue
+export type ConstantPool = t.ConstantPool
 export type JvmObject = t.JvmObject
 export type FieldInfo = t.FieldInfo
 export type FieldHandle = t.FieldHandle
@@ -43,6 +43,9 @@ export type NativeMethod = t.NativeMethod
 export type MethodCode = t.MethodCode
 export type MethodCodeLuau = t.MethodCodeLuau
 export type MethodCodeJava = t.MethodCodeJava
+export type LineNumberTable = t.LineNumberTable
+export type LineNumberTableEntry = t.LineNumberTableEntry
+export type ExceptionTable = t.ExceptionTable
 export type ExceptionHandler = t.ExceptionHandler
 export type MethodCodeAbstract = t.MethodCodeAbstract
 export type Classfile = t.Classfile
@@ -80,7 +83,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
     end
 
     local jvm = exception.jvm
-    local Throwable = jvm:resolve_class("java/lang/Throwable")
+    local Throwable = jvm:load_class("java/lang/Throwable")
     if not exception:instance_of(Throwable) then
         return `non-throwable exception: {exception:__tostring()}`
     end

@@ -17,10 +17,7 @@ function frame.push_on(
     local class = method.class
 
     if not typechecker.check_method(jvm, args, class, method_info) then
-        jvm:throw_exception(
-            "java/lang/IncompatibleClassChangeError",
-            `invalid args given to {method.class.fqcn}.{method_info.name}{method_info.descriptor}`
-        )
+        jvm:throw_exception("java/lang/IncompatibleClassChangeError", "typechecking failed")
     end
 
     if method_info.code.kind == "java" then
@@ -30,18 +27,18 @@ function frame.push_on(
         local current_local = 1
 
         if not method_info.static then
-            locals[current_local] = args[current_arg]
+            local this = args[current_arg]
+            locals[current_local] = this
             current_arg += 1
             current_local += 1
         end
 
-        for _, arg in method_info.type:get().arguments do
+        for i, arg in method_info.type:get().arguments do
             local val = args[current_arg]
             locals[current_local] = val
 
             local slots = jvm_type.slots_of(arg)
             if slots == "2" then
-                current_local += 1
                 locals[current_local] = nil -- holes are fine here
             end
 

@@ -25,8 +25,8 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
 
     if cp_info.tag == "Class" then
         local class_name = class_parser.utf8_value(classfile, cp_info.name_index)
-        value = { type = "class" :: "class", value = self._jvm:resolve_class(class_name, self._class.loader) }
-    elseif cp_info.tag == "field" then
+        value = { type = "class" :: "class", value = self._jvm:load_class(class_name, self._class.loader) }
+    elseif cp_info.tag == "Fieldref" then
         local name_and_type = classfile.constant_pool[cp_info.name_and_type_index]
         assert(name_and_type.tag == "NameAndType")
         local name, descriptor =
@@ -65,7 +65,7 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
     elseif cp_info.tag == "Long" then
         value = { type = "long" :: "long", value = cp_info.value }
     else
-        self._jvm:internal_error(`cant resolve constant type {cp_info.tag}`)
+        self._jvm:_internal_error(`cant resolve constant type {cp_info.tag}`)
     end
 
     local value = value :: t.ConstantValue

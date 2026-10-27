@@ -1,4 +1,5 @@
 local t = require("../t")
+local typechecker = require("../typechecker")
 local util = require("../util")
 local dispatcher = require("./dispatcher")
 local frame = require("./frame")
@@ -26,6 +27,32 @@ end
 
 local function read_u16be(b: buffer, offset: number): number
     return bit32.rshift(bit32.byteswap(buffer.readu16(b, offset)), 16)
+end
+
+local function check_type(jvm: t.Jvm, value: t.JvmValue, target: t.JvmType | "ref")
+    if target == "ref" then
+        if value == nil then
+            return
+        end
+
+        if type(value) == "table" and value.__type == "JvmObject" then
+            return
+        end
+    else
+        if typechecker.check_value(value, target) then
+            return
+        end
+    end
+
+    error("invalid type in bytecode step", 2)
+end
+
+local function not_null(jvm: t.Jvm, value: t.JvmObjectRef): t.JvmObject
+    if value == nil then
+        return jvm:throw_exception("java/lang/NullPointerException")
+    end
+
+    return value
 end
 
 local LONG_SLOT_MARKER = newproxy(false)
@@ -82,13 +109,21 @@ local function pop(f: t.StackFrame, slots: "1" | "2" | "any"): (t.JvmValue, "1" 
     end
 end
 
+local function pop_n(f: t.StackFrame, n: number): { t.JvmValue }
+    local out = table.create(n)
+
+    for i = 1, n do
+        local value = pop(f, "any")
+        table.insert(out, value)
+    end
+
+    return out :: { t.JvmValue }
+end
+
 local function get_local(f: t.StackFrame, idx: number): t.JvmValue
     assert(f.code.kind == "java")
     local value = f.locals[idx + 1]
-    if not value then
-        error(`no local at index {idx}`)
-    end
-
+    -- dont check, null references are allowed
     return value
 end
 
@@ -204,7 +239,7 @@ local function step(jvm: t.Jvm)
             error(value, 0)
         end
 
-        return frame.return_from_current_frame(jvm, thread, #method.type:get().arguments, value)
+        return frame.return_from_current_frame(jvm, thread, if method.type:get().returns == "void" then 0 else 1, value)
     end
 
     local code = f.code.code
@@ -225,13 +260,13 @@ local function step(jvm: t.Jvm)
     end
 
     if wide and not supports_wide(op) then
-        jvm:internal_error(string.format("opcode %02X does not support wide", op))
+        jvm:_internal_error(string.format("opcode %02X does not support wide", op))
     end
 
     if op == 0x00 then -- nop
         -- do nothing
     elseif op == 0x01 then -- aconst_null
-        push(f, nil, "1") -- nil is a null ref
+        push(f, nil, "1")
     elseif op >= 0x02 and op <= 0x08 then -- aconst_i
         push(f, op - 0x03, "1")
     elseif op >= 0x09 and op <= 0x0A then -- lconst_i
@@ -262,26 +297,41 @@ local function step(jvm: t.Jvm)
             push(f, k:get(idx, "string"), "1")
         elseif k:is(idx, "class") then
             push(f, k:get(idx, "class"), "1")
+        else
+            error("")
         end -- todo(dynamic): MethodType and MethodHandle
     elseif op >= 0x2A and op <= 0x2D then --aload_i
         local idx = op - 0x2A
         local value = get_local(f, idx)
+        check_type(jvm, value, "ref")
         push(f, value, "1")
     elseif op >= 0x4B and op <= 0x4E then -- astore_i
         local idx = op - 0x4B
         local value = pop(f, "1")
+        check_type(jvm, value, "ref") -- TODO: support returnAddress
         set_local(f, idx, value)
-    elseif op == 0xB8 then
+    elseif op == 0xB5 then -- putfield
         local idx = read_u16be(code, f.pc)
         f.pc += 2
-
+        local field = k:get(idx, "field")
+        local value = pop(f, "any")
+        local object = not_null(jvm, pop(f, "any") :: t.JvmObjectRef)
+        object:set_field(field, value)
+    elseif op == 0xB7 then -- invokespecial
+        local idx = read_u16be(code, f.pc)
+        f.pc += 2
+        local method = k:get(idx, "method")
+        local arg_count = #method.info.type:get().arguments + 1
+        local args = pop_n(f, arg_count) :: t.Arguments
+        args.n = arg_count
+        local dispatched_method = dispatcher.dispatch(jvm, method, "special", class)
+        invoke_inline(jvm, dispatched_method, args)
+    elseif op == 0xB8 then -- invokestatic
+        local idx = read_u16be(code, f.pc)
+        f.pc += 2
         local method = k:get(idx, "method")
         local arg_count = #method.info.type:get().arguments
-        local args = table.create(arg_count) :: t.Arguments
-        for _ = 1, arg_count do
-            local v = pop(f, "any")
-            table.insert(args, 1, v)
-        end
+        local args = pop_n(f, arg_count) :: t.Arguments
         args.n = arg_count
         local dispatched_method = dispatcher.dispatch(jvm, method, "static", class)
         invoke_inline(jvm, dispatched_method, args)
@@ -300,7 +350,7 @@ local function step(jvm: t.Jvm)
 
         f.pc = start_pc + offset
     else
-        jvm:internal_error(string.format("unimplemented opcode 0x%02X", op))
+        jvm:_internal_error(string.format("unimplemented opcode 0x%02X", op))
     end
 end
 

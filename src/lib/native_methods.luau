@@ -8,6 +8,31 @@ native_methods["java/lang/Object"] = {
     end,
 }
 
+native_methods["java/lang/String"] = {
+    ["replace:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"] = function(
+        jvm: t.Jvm,
+        this: t.JvmObject,
+        match: t.JvmObject,
+        other: t.JvmObject
+    ): t.JvmObject
+        local this = this:inner_string()
+        local match = match:inner_string()
+        local replacement = other:inner_string()
+        local new = string.gsub(this, match, replacement)
+        return jvm:create_string(new)
+    end,
+
+    ["concat:(Ljava/lang/String;)Ljava/lang/String;"] = function(
+        jvm: t.Jvm,
+        this: t.JvmObject,
+        other: t.JvmObject
+    ): t.JvmObject
+        local this = this:inner_string()
+        local other = other:inner_string()
+        return jvm:create_string(this .. other)
+    end,
+}
+
 native_methods["java/lang/Throwable"] = {
     ["fillInBacktrace:(I)V"] = function(jvm: t.Jvm, this: t.JvmObject, skip: number)
         local stack: { t.StackFrame } = {}
@@ -20,9 +45,9 @@ native_methods["java/lang/Throwable"] = {
     end,
 
     ["fillInStackTrace:()Ljava/lang/Throwable;"] = function(jvm: t.Jvm, this: t.JvmObject): t.JvmObject
-        local Throwable = jvm:resolve_class("java/lang/Throwable")
+        local Throwable = jvm:load_class("java/lang/Throwable")
 
-        local StackTraceElement = jvm:resolve_class("java/lang/StackTraceElement")
+        local StackTraceElement = jvm:load_class("java/lang/StackTraceElement")
         local stacktrace_ref = Throwable:resolve_field("stacktrace", "[Ljava/lang/StackTraceElement;")
         local declaring_class_ref = StackTraceElement:resolve_field("declaringClass", "Ljava/lang/String;")
         local method_name_ref = StackTraceElement:resolve_field("methodName", "Ljava/lang/String;")

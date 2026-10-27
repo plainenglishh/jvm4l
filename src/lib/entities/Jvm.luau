@@ -68,7 +68,7 @@ local function get_members(
                 if exception_info.catch_type ~= 0 then
                     local class_info = class_parser.class(classfile, exception_info.catch_type)
                     local class_name = class_parser.class_name(classfile, class_info)
-                    catch_type = jvm:resolve_class(class_name, defining_loader)
+                    catch_type = jvm:load_class(class_name, defining_loader)
                 end
 
                 table.insert(exceptions, {
@@ -184,9 +184,9 @@ local function bootstrap_core_classes(self: t.Jvm)
     local class_mirror = class:_new_uninitialised({ kind = "class", value = class })
     class._mirror = class_mirror
 
-    self:resolve_class("java/lang/String")
-    self:resolve_class("java/lang/Throwable")
-    self:resolve_class("java/lang/Thread")
+    self:load_class("java/lang/String")
+    self:load_class("java/lang/Throwable")
+    self:load_class("java/lang/Thread")
 end
 
 function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
@@ -273,10 +273,10 @@ local function get_array_class(self: t.Jvm, name: string, initiating_loader: t.J
     local defining_loader: t.JvmClassLoader
     local element_class: t.JvmClass?
     if element_first_char == "[" then
-        element_class = self:resolve_class(element, initiating_loader)
+        element_class = self:load_class(element, initiating_loader)
         defining_loader = element_class.loader
     elseif element_first_char == "L" then
-        element_class = self:resolve_class(string.sub(element, 2, #element - 1), initiating_loader)
+        element_class = self:load_class(string.sub(element, 2, #element - 1), initiating_loader)
         defining_loader = element_class.loader
     else
         defining_loader = "bootstrap"
@@ -289,7 +289,7 @@ local function get_array_class(self: t.Jvm, name: string, initiating_loader: t.J
     return class
 end
 
-function Jvm.get_class(self: t.Jvm, name: string, initiating_loader: t.JvmClassLoader?): t.JvmClass?
+function Jvm.load_class(self: t.Jvm, name: string, initiating_loader: t.JvmClassLoader?): t.JvmClass
     local initiating_loader: t.JvmClassLoader = initiating_loader or self:get_loader()
 
     if self._classes[initiating_loader][name] then
@@ -302,28 +302,22 @@ function Jvm.get_class(self: t.Jvm, name: string, initiating_loader: t.JvmClassL
 
     if initiating_loader == "bootstrap" then
         if name == "java/lang/Object" or name == "java/lang/Class" then
-            self:internal_error("attempt to get uninitialised core class? how did you reach this point?")
+            self:_internal_error("attempt to get uninitialised core class? how did you reach this point?")
         end
 
         local classfile = jcl_classfiles[name]
         if not classfile then
-            return nil
+            return self:throw_exception("java/lang/NoClassDefFoundError", name)
         end
 
         return self:define_class(classfile, initiating_loader)
     end
 
-    local derived_from_parent = self:get_class(name, initiating_loader.class.loader)
-    if derived_from_parent then
-        return derived_from_parent
-    end
-
-    local _fully_qualified_name = name:gsub("/", ".") -- to be passed to classloader
-    return util.unimplemented("user class loaders are not yet supported")
-end
-
-function Jvm.resolve_class(self: t.Jvm, name: string, initiating_loader: t.JvmClassLoader?): t.JvmClass
-    return self:get_class(name, initiating_loader) or self:throw_exception("java/lang/NoClassDefFoundError", name)
+    local fqcn = name:gsub("/", ".")
+    local loadClass = initiating_loader.class:resolve_method("loadClass", "(Ljava/lang/String;)Ljava/lang/Class")
+    local class_o = initiating_loader:invoke(loadClass, self:create_string(fqcn))
+    assert(type(class_o) == "table")
+    return class_o:inner_class()
 end
 
 function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.JvmClassLoader): t.JvmClass
@@ -339,13 +333,13 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
 
     local super_class_info = class_parser.class(classfile, classfile.super_class)
     local super_class_name = class_parser.class_name(classfile, super_class_info)
-    local super_class = self:resolve_class(super_class_name, defining_loader)
+    local super_class = self:load_class(super_class_name, defining_loader)
 
     local implements = {}
     for _, interface_idx in classfile.interfaces do
         local interface_info = class_parser.class(classfile, interface_idx)
         local interface_name = class_parser.class_name(classfile, interface_info)
-        local interface = self:resolve_class(interface_name, defining_loader)
+        local interface = self:load_class(interface_name, defining_loader)
         table.insert(implements, interface)
     end
 
@@ -371,8 +365,8 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
     return class
 end
 
-function Jvm._get_interned_method(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.MethodHandle?
-    local by_class = self._interned_method_handles[class]
+function Jvm._get_interned_field(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.FieldHandle?
+    local by_class = self._interned_field_handles[class]
     if not by_class then
         return nil
     end
@@ -413,8 +407,8 @@ function Jvm._create_interned_field(self: t.Jvm, class: t.JvmClass, field_info: 
     return handle
 end
 
-function Jvm._get_interned_field(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.FieldHandle?
-    local by_class = self._interned_field_handles[class]
+function Jvm._get_interned_method(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.MethodHandle?
+    local by_class = self._interned_method_handles[class]
     if not by_class then
         return nil
     end
@@ -469,7 +463,7 @@ end
 function Jvm.create_array(self: t.Jvm, element: t.JvmType, size_or_values: number | { t.JvmValue }): t.JvmObject
     local elem_descriptor = jvm_type.type_to_descriptor(element)
     local class_name = `[{elem_descriptor}`
-    local class = self:resolve_class(class_name)
+    local class = self:load_class(class_name)
 
     local size = if type(size_or_values) == "number" then size_or_values else #size_or_values
 
@@ -494,13 +488,13 @@ function Jvm.create_exception(
     name: string,
     message: string?,
     cause: t.JvmObject?,
-    dont_capture_stack: boolean?
+    skip_stack_capture: boolean?
 ): t.JvmObject
-    local Exception = self:resolve_class(name)
+    local Exception = self:load_class(name)
     local message = if message then self:create_string(message) else nil
 
     local magic: t._MagicValue?
-    if (not dont_capture_stack) and self.current_thread then
+    if (not skip_stack_capture) and self.current_thread then
         magic = { kind = "throwable", stack = table.clone(self.current_thread.stack) }
     end
 
@@ -521,13 +515,13 @@ function Jvm.throw_exception(
     name: string,
     message: string?,
     cause: t.JvmObject?,
-    dont_capture_stack: boolean?
+    skip_stack_capture: boolean?
 ): never
-    local e = self:create_exception(name, message, cause, dont_capture_stack)
+    local e = self:create_exception(name, message, cause, skip_stack_capture)
     error(e, 0) -- Caught by the outer host if async, or the exec engine if inside bytecode
 end
 
-function Jvm.create_internal_error(self: t.Jvm, message: string, level: number?): t.JvmObject
+function Jvm._create_internal_error(self: t.Jvm, message: string, level: number?): t.JvmObject
     local traceback = debug.traceback(nil, (level or 1) + 1)
     message ..= ` ({dbg.vm_info(self)})`
 
@@ -536,8 +530,8 @@ function Jvm.create_internal_error(self: t.Jvm, message: string, level: number?)
     return self:create_exception("java/lang/InternalError", message, cause)
 end
 
-function Jvm.internal_error(self: t.Jvm, message: string, level: number?): never
-    error(self:create_internal_error(message, level), -1)
+function Jvm._internal_error(self: t.Jvm, message: string, level: number?): never
+    error(self:_create_internal_error(message, level), 0)
 end
 
 function Jvm.coerce(self: t.Jvm, ...: t.IntoJvmValue): ...t.JvmValue
@@ -559,8 +553,11 @@ function Jvm.coerce(self: t.Jvm, ...: t.IntoJvmValue): ...t.JvmValue
     return unpack(values)
 end
 
-function Jvm.run(self: t.Jvm, main_path: string, args: { t.JvmValue })
-    util.unimplemented()
+function Jvm.run(self: t.Jvm, main_path: string, ...: t.JvmValue)
+    local ApplicationClassLoader = self:load_class("jvm4l/ApplicationClassLoader")
+    local ApplicationClassLoader_new = ApplicationClassLoader:resolve_method("<init>", "(Ljava/lang/ClassLoader;)V")
+    local acl = ApplicationClassLoader:new(ApplicationClassLoader_new, nil)
+    print(acl)
 end
 
 table.freeze(Jvm)

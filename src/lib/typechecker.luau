@@ -49,6 +49,10 @@ function typechecker.check_value(value: t.JvmValue, target: t.JvmType): boolean
             return false
         end
 
+        if value.__type ~= "JvmObject" then
+            return false
+        end
+
         return value:instance_of(target)
     end
 
@@ -72,14 +76,19 @@ end
 function typechecker.check_method(jvm: t.Jvm, values: t.Arguments, class: t.JvmClass, target: t.MethodInfo): boolean
     local method_type = target.type:get()
     local static = target.static
+    local expected_args = #method_type.arguments + if static then 0 else 1
 
-    if values.n ~= #method_type.arguments + if static then 0 else 1 then
+    if values.n ~= expected_args then
         return false
     end
 
     local arg_start = 1
     if not static then
         arg_start = 2
+
+        if values[1] == nil then
+            return false
+        end
 
         if not typechecker.check_value(values[1], class) then
             return false

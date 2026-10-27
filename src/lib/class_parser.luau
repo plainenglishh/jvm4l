@@ -403,14 +403,15 @@ function class_parser.get_line_number_table_attribute(
         return nil
     end
 
-    local line_numbers = {}
+    local line_numbers: t.LineNumberTable = {}
 
     local line_number_count = read_u16be(line_numbers_info.data, 0)
     for i = 1, line_number_count do
         local offset = ((i - 1) * 4) + 2
         local start_pc = read_u16be(line_numbers_info.data, offset)
         local line_number = read_u16be(line_numbers_info.data, offset + 2)
-        table.insert(line_numbers, { start_pc = start_pc, line = line_number })
+        local entry: t.LineNumberTableEntry = { start_pc = start_pc, line = line_number }
+        table.insert(line_numbers, entry)
     end
 
     return line_numbers

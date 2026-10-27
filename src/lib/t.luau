@@ -6,11 +6,83 @@
 	Specialised library users, such as debugger implementations, should feel 
 	feel free to read from private items, but must never set or construct 
 	private items.
-]=]
 
+    Where possible, define types only within the module they're related to. This
+    file is for types used across the entire codebase that cannot reasonably be
+    kept within a single module (e.g., if it would cause cyclic dependencies,
+    or be far too cumbersome).
+]=]
 local t = {}
 
 --------------------------------------------------------------------------------
+-- Types
+--------------------------------------------------------------------------------
+
+--// Computational types
+
+--- A runtime 32-bit integer. Also represents booleans, bytes, shorts and chars.
+export type JvmInt = number
+--- A runtime 32-bit float.
+export type JvmFloat = number
+--- A runtime 64-bit integer.
+export type JvmLong = integer
+--- A runtime 64-bit float.
+export type JvmDouble = number
+
+--- Any runtime integral number.
+export type JvmIntegral = JvmInt | JvmLong
+--- Any runtime real number.
+export type JvmReal = JvmFloat | JvmDouble
+--- Any runtime primitive.
+export type JvmPrimitive = JvmIntegral | JvmReal
+--- Any runtime object reference, including null.
+export type JvmObjectRef = JvmObject?
+
+--- Any runtime value.
+export type JvmValue = JvmPrimitive | JvmObjectRef
+--- Any value that can be converted into a `JvmValue`
+export type IntoJvmValue = boolean | string | number | integer | JvmObjectRef
+
+--// Actual Types
+
+export type JvmType = "boolean" | "byte" | "short" | "char" | "int" | "long" | "float" | "double" | JvmClass
+export type JvmMethodType = {
+    arguments: { JvmType },
+    returns: JvmType | "void",
+}
+
+--------------------------------------------------------------------------------
+-- Common Types
+--------------------------------------------------------------------------------
+
+--- An object representing arguments to be passed into a method.
+export type Arguments = { n: number, [number]: JvmValue }
+t.Arguments = {}
+--- Creates an `Arguments` from a tuple of `JvmValue`s.
+function t.Arguments.from_tuple(...: JvmValue): Arguments
+    return table.pack(...)
+end
+--- Creates an `Arguments` from an array of `JvmValue`s.
+function t.Arguments.from_array(values: { JvmValue }, count: number?): Arguments
+    local count = count or #values
+    local args = table.create(count) :: Arguments
+    args.n = count
+    table.move(values, 1, count, 1, args)
+    return args
+end
+
+export type Monitor = {
+    --- Who owns this monitor.
+    held_by: Thread?,
+    --- How many times do the own it.
+    held_by_depth: number,
+    --- Threads waiting to be notified.
+    waiting: { Thread },
+}
+--- Creates an empty `Monitor`.
+function t.Monitor(): Monitor
+    return { held_by = nil, held_by_depth = 0, waiting = {} }
+end
 
 --- A lazily loaded value.
 export type Lazy<T> = setmetatable<{
@@ -23,84 +95,11 @@ export type Lazy<T> = setmetatable<{
     get: (self: Lazy<T>) -> T,
 }>
 
-export type ConstantValueType =
-    "class"
-    | "field"
-    | "method"
-    | "interface_method"
-    | "string"
-    | "int"
-    | "float"
-    | "double"
-    | "long"
-
-export type ConstantValue =
-    | { type: "class", value: JvmClass }
-    | { type: "field", value: FieldHandle }
-    | { type: "method" | "interface_method", value: MethodHandle }
-    | { type: "string", value: JvmObject }
-    | { type: "int" | "float" | "double", value: number }
-    | { type: "long", value: integer }
-
-export type ConstantPool = setmetatable<
-    {
-        read _jvm: Jvm,
-        read _class: JvmClass,
-        read _classfile: Classfile,
-        read _resolved: { [number]: ConstantValue },
-    },
-    {
-        read __index: getmetatable<ConstantPool>,
-        read new: (class: JvmClass) -> ConstantPool,
-        read _resolve: (self: ConstantPool, idx: number) -> ConstantValue,
-        read is: (self: ConstantPool, idx: number, type: ConstantValueType) -> boolean,
-        read get: & ((self: ConstantPool, idx: number, type: "class") -> JvmClass)
-            & ((self: ConstantPool, idx: number, type: "field") -> FieldHandle)
-            & ((self: ConstantPool, idx: number, type: "method" | "interface_method") -> MethodHandle)
-            & ((self: ConstantPool, idx: number, type: "string") -> JvmObject)
-            & ((self: ConstantPool, idx: number, type: "int" | "float" | "double") -> number)
-            & ((self: ConstantPool, idx: number, type: "long") -> integer),
-    }
->
-
 --------------------------------------------------------------------------------
-
---// Computational Types
-
---- A runtime 32-bit integer. Also represents booleans, bytes, shorts and chars.
-export type JvmInt = number
---- A runtime 32-bit float.
-export type JvmFloat = number
---- A runtime 64-bit integer.
-export type JvmLong = integer
---- A runtime 64-bit float.
-export type JvmDouble = number
---- Any runtime integral number.
-export type JvmIntegral = JvmInt | JvmLong
---- Any runtime real number.
-export type JvmReal = JvmFloat | JvmDouble
---- Any runtime primitive.
-export type JvmPrimitive = JvmIntegral | JvmReal
---- Any runtime object reference, including null.
-export type JvmObjectRef = JvmObject?
---- Any runtime value.
-export type JvmValue = JvmPrimitive | JvmObjectRef
-
-export type IntoJvmValue = boolean | string | number | integer | JvmObjectRef
-
---// Actual Types
-
-export type JvmType = "boolean" | "byte" | "short" | "char" | "int" | "long" | "float" | "double" | JvmClass
-export type JvmMethodType = {
-    arguments: { JvmType },
-    returns: JvmType | "void",
-}
-
-export type Arguments = { n: number, [number]: JvmValue }
-
+-- Root JVM
+--
+-- Types relating to the top level structure of the JVM.
 --------------------------------------------------------------------------------
-
---// Entities
 
 --[=[
     A class representing a JVM instance.
@@ -133,13 +132,11 @@ export type Jvm = setmetatable<
         _interrupt: (self: Jvm) -> (),
 
         get_loader: (self: Jvm) -> JvmClassLoader,
-        get_class: (self: Jvm, name: string, initiating_loader: JvmClassLoader?) -> JvmClass?,
-        resolve_class: (self: Jvm, name: string, initiating_loader: JvmClassLoader?) -> JvmClass,
+        load_class: (self: Jvm, name: string, initiating_loader: JvmClassLoader?) -> JvmClass,
         define_class: (self: Jvm, classfile: buffer, defining_loader: JvmClassLoader) -> JvmClass,
 
         _get_interned_field: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> FieldHandle?,
         _create_interned_field: (self: Jvm, class: JvmClass, field_info: FieldInfo) -> FieldHandle,
-
         _get_interned_method: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> MethodHandle?,
         _create_interned_method: (self: Jvm, class: JvmClass, method_info: MethodInfo) -> MethodHandle,
 
@@ -151,26 +148,26 @@ export type Jvm = setmetatable<
             name: string,
             message: string?,
             cause: JvmObject?,
-            dont_capture_stack: boolean?
+            skip_stack_capture: boolean?
         ) -> JvmObject,
         throw_exception: (
             self: Jvm,
             name: string,
             message: string?,
             cause: JvmObject?,
-            dont_capture_stack: boolean?
+            skip_stack_capture: boolean?
         ) -> never,
 
         --- Creates an `InternalError`, with a `LuauError` as the cause.
-        create_internal_error: (self: Jvm, message: string, level: number?) -> JvmObject,
-        internal_error: (self: Jvm, message: string, level: number?) -> never,
+        _create_internal_error: (self: Jvm, message: string, level: number?) -> JvmObject,
+        _internal_error: (self: Jvm, message: string, level: number?) -> never,
 
         coerce: (self: Jvm, ...IntoJvmValue) -> ...JvmValue,
 
         --[=[
 			Executes `main_path`.
 		]=]
-        run: (self: Jvm, main_path: string, args: { JvmValue }) -> (), -- loads the class and invokes main on it
+        run: (self: Jvm, main_path: string, ...JvmValue) -> (), -- loads the class and invokes main on it
     }
 >
 
@@ -216,8 +213,11 @@ export type GarbageCollector = setmetatable<
     }
 >
 
---- Callback provided to GC implementations by the JVM to run finalisers on an object. Return value indicates whether to resurrect. Handles deallocation of classes under classloaders.
-export type GcFinalise = (object: JvmObject) -> boolean
+--------------------------------------------------------------------------------
+-- Execution
+--
+-- Types relating to method invocation, multi-threading and execution.
+--------------------------------------------------------------------------------
 
 --- Representation of a thread of execution.
 export type Thread = {
@@ -269,14 +269,11 @@ export type Invocation =
         value: JvmValue,
     }
 
-export type Monitor = {
-    --- Who owns this monitor.
-    held_by: Thread?,
-    --- How many times do the own it.
-    held_by_depth: number,
-    --- Threads waiting to be notified.
-    waiting: { Thread },
-}
+--------------------------------------------------------------------------------
+-- Classes
+--
+-- Types relating to Java classes, particularly loaded classes.
+--------------------------------------------------------------------------------
 
 --[=[
     A class representing a loaded JVM class.
@@ -376,6 +373,52 @@ export type JvmClass = setmetatable<
 
 export type JvmClassState = "uninitialised" | "initialising" | "initialised" | "error"
 
+export type ConstantValueType =
+    "class"
+    | "field"
+    | "method"
+    | "interface_method"
+    | "string"
+    | "int"
+    | "float"
+    | "double"
+    | "long"
+
+export type ConstantValue =
+    | { type: "class", value: JvmClass }
+    | { type: "field", value: FieldHandle }
+    | { type: "method" | "interface_method", value: MethodHandle }
+    | { type: "string", value: JvmObject }
+    | { type: "int" | "float" | "double", value: number }
+    | { type: "long", value: integer }
+
+export type ConstantPool = setmetatable<
+    {
+        read _jvm: Jvm,
+        read _class: JvmClass,
+        read _classfile: Classfile,
+        read _resolved: { [number]: ConstantValue },
+    },
+    {
+        read __index: getmetatable<ConstantPool>,
+        read new: (class: JvmClass) -> ConstantPool,
+        read _resolve: (self: ConstantPool, idx: number) -> ConstantValue,
+        read is: (self: ConstantPool, idx: number, type: ConstantValueType) -> boolean,
+        read get: & ((self: ConstantPool, idx: number, type: "class") -> JvmClass)
+            & ((self: ConstantPool, idx: number, type: "field") -> FieldHandle)
+            & ((self: ConstantPool, idx: number, type: "method" | "interface_method") -> MethodHandle)
+            & ((self: ConstantPool, idx: number, type: "string") -> JvmObject)
+            & ((self: ConstantPool, idx: number, type: "int" | "float" | "double") -> number)
+            & ((self: ConstantPool, idx: number, type: "long") -> integer),
+    }
+>
+
+--------------------------------------------------------------------------------
+-- Objects
+--
+-- Types relating to Java object instances.
+----------------------------------------------------------------------------------
+
 --[=[
     A class representing an instantiated JVM object.
 ]=]
@@ -417,6 +460,7 @@ export type JvmObject = setmetatable<
 
         inner_string: (self: JvmObject) -> string,
         inner_thread: (self: JvmObject) -> Thread,
+        inner_class: (self: JvmObject) -> JvmClass,
         get_array_length: (self: JvmObject) -> number,
         get_array_element: (self: JvmObject, index: number) -> JvmValue,
         set_array_element: (self: JvmObject, index: number, value: JvmValue) -> (),
@@ -449,6 +493,12 @@ export type _MagicValue =
         stack: { StackFrame },
     }
 
+--------------------------------------------------------------------------------
+-- Fields
+--
+-- Types relating to field metadata and references.
+--------------------------------------------------------------------------------
+
 --- Field metadata.
 export type FieldInfo = {
     read name: string,
@@ -472,6 +522,13 @@ export type FieldHandle = {
     read class: JvmClass,
     read info: FieldInfo,
 }
+
+--------------------------------------------------------------------------------
+-- Methods
+--
+-- Types relating to method references, metadata and implementations. Types
+-- relating to method invocation and execution do not belong here.
+--------------------------------------------------------------------------------
 
 --- Method metadata.
 export type MethodInfo = {
@@ -509,27 +566,38 @@ export type NativeMethod = (jvm: Jvm, ...JvmValue) -> JvmValue
 --[=[
 	The implementation of a `JvmMethod`.
 
-	This is independent of the `native` flag, a non-native synthetic method
-	may be implemented with a luau closure, and vice versa.
+	This is independent of the `native` and `abstract` flags, a non-native 
+    synthetic method may be implemented with a luau closure, and vice versa.
 ]=]
 export type MethodCode = MethodCodeLuau | MethodCodeJava | MethodCodeAbstract
 
+--[=[
+    A Luau (native) implementation of a method.
+]=]
 export type MethodCodeLuau = {
     read kind: "luau",
     read closure: NativeMethod,
 }
 
+--[=[
+    A Java (bytecode) implementation of a method.
+]=]
 export type MethodCodeJava = {
     read kind: "java",
     read max_stack: number,
     read max_locals: number,
     read code: buffer,
-    read exceptions: { ExceptionHandler },
+    read exceptions: ExceptionTable,
     read line_numbers: LineNumberTable?,
 }
 
-export type LineNumberTable = { { start_pc: number, line: number } }
+export type LineNumberTable = { LineNumberTableEntry }
+export type LineNumberTableEntry = {
+    start_pc: number,
+    line: number,
+}
 
+export type ExceptionTable = { ExceptionHandler }
 export type ExceptionHandler = {
     start_pc: number,
     end_pc: number,
@@ -537,11 +605,22 @@ export type ExceptionHandler = {
     catch_type: JvmClass?,
 }
 
+--[=[
+    A method without an implementation.
+]=]
 export type MethodCodeAbstract = {
     read kind: "abstract",
 }
 
---// Classfile Types
+--------------------------------------------------------------------------------
+-- Classfiles
+--
+-- This section contains types relating to classfiles.
+--
+-- As a general rule, if an attribute can be parsed into a live type defined
+-- above, it should be. Otherwise, it should be a classfile specific type
+-- defined below.
+--------------------------------------------------------------------------------
 
 export type Classfile = {
     read minor_version: number,

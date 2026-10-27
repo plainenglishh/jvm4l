@@ -63,6 +63,7 @@ end
 function JvmObject._initialise(self: t.JvmObject, constructor: t.MethodHandle?, ...: t.JvmValue)
     local args = table.pack(...)
     table.insert(args, 1, self)
+    args.n += 1
     local constructor = constructor or self.class:resolve_method("<init>", "()V")
     local dispatched_constructor = execution_engine.dispatch(self.jvm, constructor, "special", self.class, self)
     execution_engine.invoke_sync(self.jvm, dispatched_constructor, args)
@@ -107,6 +108,14 @@ end
 function JvmObject.inner_thread(self: t.JvmObject): t.Thread
     if not self._magic or self._magic.kind ~= "thread" then
         error("not a thread")
+    end
+
+    return self._magic.value
+end
+
+function JvmObject.inner_class(self: t.JvmObject): t.JvmClass
+    if not self._magic or self._magic.kind ~= "class" then
+        error("not a class")
     end
 
     return self._magic.value
