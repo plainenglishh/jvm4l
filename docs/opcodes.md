@@ -21,37 +21,10 @@ current frame, or reschedule on budget exhaustion/memory contention.
 The full list of events that require a step break is:-
 1. budget exhaustion, which may be checked before every instruction, or at a 
 branch;
-2. stack mutation, which includes method invocation, method return, or any 
-operation that may cause a class to be initialised or a bootstap method to be
-invoked; and
+2. inline method invocations (excluding class initialisers and bootstrap 
+methods, which are invoked synchronously below the step) and method returns;
 3. thread synchronisation, which may be implemented within `monitor` and 
 `monitorexit`.
-
-It is trivial to implement break checks in the interpreter:-
-1. the first can be implemented by having the burst loop be a 
-`for _ = i, budget do ... end` loop;
-2. the second can be implemented by checking if the stack depth has changed 
-after every instruction, or following instructions that can modify stack depth; 
-and
-3. the third has very few places it can occur, which can be checked manually.
-
-Implementing break checks in JIT compiled chunks is slightly harder, but do-able:-
-1. the first can be implemented by checking for exhaustion at every branch,
-2. the second has to be implemented after every relevant instruction, although 
-for instructions that have only a chance to change the stack depth (e.g., 
-`putstatic` or `new` via `<clinit>` invocation) can first check for depth 
-changes before breaking; and
-3. the third similarly has very few places it can occur, which can be checked 
-manually.
-
-A unique case is that of host-generated throwables. While user defined throwable 
-may make use of `<clinit>`, throwables within the Jvm4L JCL (the only throwables 
-that may be thrown at any point by the JVM) do not use `<clinit>` at all, and do
-not use constructors to create the object. User defined throwables cannot be 
-thrown at any point, and must be created through `new`, or a native method 
-invocation, which can both trigger a break condition. The bootstrap classloader 
-asserts that no JCL throwable, or its superclasses, contains a `<clinit>`
-method.
 
 ## Implemented Opcodes
 
@@ -59,7 +32,7 @@ Len - Instruction length in bytes, or `?` if variable
 Bra - Instruction can branch (excluding athrow, returns and invocations)
 Int - Implemented in interpreter
 Jit - Implemented in JIT
-Brk - Instruction can break a burst (B = via Bootstrap Method, F = via explicit frame push/pop, S = via synchronisation, C = via class initialisation)
+Brk - Instruction should break from a burst (S = Synchronisation, R = Method Return, I = Inline Method Invocation)
 
 | Opcode(s)     | Mnemonic          | Len | Bra | Int | Jit | Brk |
 |:--------------|:------------------|:----|:---:|:---:|:---:|:---:|
@@ -71,9 +44,9 @@ Brk - Instruction can break a burst (B = via Bootstrap Method, F = via explicit 
 | `0x0E`-`0x0F` | `dconst_<n>`      | 1   |     |  X  |     |     |
 | `0x10`        | `bipush`          | 2   |     |  X  |     |     |
 | `0x11`        | `sipush`          | 3   |     |  X  |     |     |
-| `0x12`        | `ldc`             | 2   |     |  X  |     |  B  |
-| `0x13`        | `ldc_w`           | 3   |     |     |     |  B  |
-| `0x14`        | `ldc2_w`          | 3   |     |     |     |  B  |
+| `0x12`        | `ldc`             | 2   |     |  X  |     |     |
+| `0x13`        | `ldc_w`           | 3   |     |     |     |     |
+| `0x14`        | `ldc2_w`          | 3   |     |     |     |     |
 | `0x15`        | `iload`           | 2   |     |     |     |     |
 | `0x16`        | `lload`           | 2   |     |     |     |     |
 | `0x17`        | `fload`           | 2   |     |     |     |     |
@@ -184,22 +157,22 @@ Brk - Instruction can break a burst (B = via Bootstrap Method, F = via explicit 
 | `0xA9`        | `ret`             | 2   |  X  |     |     |     |
 | `0xAA`        | `tableswitch`     | ?   |  X  |     |     |     |
 | `0xAB`        | `lookupswitch`    | ?   |  X  |     |     |     |
-| `0xAC`        | `ireturn`         | 1   |     |  X  |     |  F  |
-| `0xAD`        | `lreturn`         | 1   |     |  X  |     |  F  |
-| `0xAE`        | `freturn`         | 1   |     |  X  |     |  F  |
-| `0xAF`        | `dreturn`         | 1   |     |  X  |     |  F  |
-| `0xB0`        | `areturn`         | 1   |     |  X  |     |  F  |
-| `0xB1`        | `return`          | 1   |     |  X  |     |  F  |
-| `0xB2`        | `getstatic`       | 3   |     |  X  |     |  C  |
-| `0xB3`        | `putstatic`       | 3   |     |  X  |     |  C  |
+| `0xAC`        | `ireturn`         | 1   |     |  X  |     |  R  |
+| `0xAD`        | `lreturn`         | 1   |     |  X  |     |  R  |
+| `0xAE`        | `freturn`         | 1   |     |  X  |     |  R  |
+| `0xAF`        | `dreturn`         | 1   |     |  X  |     |  R  |
+| `0xB0`        | `areturn`         | 1   |     |  X  |     |  R  |
+| `0xB1`        | `return`          | 1   |     |  X  |     |  R  |
+| `0xB2`        | `getstatic`       | 3   |     |  X  |     |     |
+| `0xB3`        | `putstatic`       | 3   |     |  X  |     |     |
 | `0xB4`        | `getfield`        | 3   |     |  X  |     |     |
 | `0xB5`        | `putfield`        | 3   |     |  X  |     |     |
-| `0xB6`        | `invokevirtual`   | 3   |     |  X  |     |  F  |
-| `0xB7`        | `invokespecial`   | 3   |     |  X  |     |  F  |
-| `0xB8`        | `invokestatic`    | 3   |     |  X  |     |  F  |
-| `0xB9`        | `invokeinterface` | 5   |     |     |     |  F  |
-| `0xBA`        | `invokedynamic`   | 5   |     |     |     |  F  |
-| `0xBB`        | `new`             | 3   |     |  X  |     |  C  |
+| `0xB6`        | `invokevirtual`   | 3   |     |  X  |     |  I  |
+| `0xB7`        | `invokespecial`   | 3   |     |  X  |     |  I  |
+| `0xB8`        | `invokestatic`    | 3   |     |  X  |     |  I  |
+| `0xB9`        | `invokeinterface` | 5   |     |     |     |  I  |
+| `0xBA`        | `invokedynamic`   | 5   |     |     |     |  I  |
+| `0xBB`        | `new`             | 3   |     |  X  |     |     |
 | `0xBC`        | `newarray`        | 2   |     |     |     |     |
 | `0xBD`        | `anewarray`       | 3   |     |     |     |     |
 | `0xBE`        | `arraylength`     | 1   |     |     |     |     |

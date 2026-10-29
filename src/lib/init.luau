@@ -1,6 +1,7 @@
 --!optimize 2
 
 local t = require("@self/t")
+local util = require("@self/util")
 
 --EXPORT_BEGIN
 export type JvmInt = t.JvmInt
@@ -17,7 +18,6 @@ export type JvmType = t.JvmType
 export type JvmMethodType = t.JvmMethodType
 export type Arguments = t.Arguments
 export type Monitor = t.Monitor
-export type Lazy<T> = t.Lazy<T>
 export type Jvm = t.Jvm
 export type IntoJvmSettings = t.IntoJvmSettings
 export type LinkNativeCallback = t.LinkNativeCallback
@@ -78,8 +78,8 @@ local jvm4l = {}
 jvm4l.Jvm = require("@self/entities/Jvm")
 
 function jvm4l.display_exception(exception: t.JvmObject): string
-    if type(exception) == "string" then
-        return `uncoerced exception: {exception}`
+    if not util.is_object(exception) then
+        return `non-jvm error: {exception}`
     end
 
     local jvm = exception.jvm

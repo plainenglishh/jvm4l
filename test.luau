@@ -1,20 +1,21 @@
 print("-----")
 
 local jvm4l = require("./src/lib")
+local jit = require("./src/lib/jit")
 
 local function link_native(class_name: string, signature: string): jvm4l.NativeMethod?
-    if class_name == "jvm4l/Test" and signature == "print_int:(I)V" then
+    if class_name == "jvm4l/test/Test" and signature == "print_int:(I)V" then
         return function(jvm: jvm4l.Jvm, value)
             print(value)
             return nil
         end
-    elseif class_name == "jvm4l/Test" and signature == "error:()V" then
+    elseif class_name == "jvm4l/test/Test" and signature == "error:()V" then
         return function(jvm: jvm4l.Jvm)
             error("error was called!")
         end
-    elseif class_name == "jvm4l/Test" and signature == "calls_error_wrapper:()V" then
+    elseif class_name == "jvm4l/test/Test" and signature == "calls_error_wrapper:()V" then
         return function(jvm: jvm4l.Jvm)
-            local Test = jvm:load_class("jvm4l/Test")
+            local Test = jvm:load_class("jvm4l//testTest")
             local error_wrapper = Test:resolve_method("error_wrapper", "()V")
             Test:invoke_static(error_wrapper)
             return nil
@@ -36,11 +37,11 @@ local vm = jvm4l.Jvm.new({
         print(string.format("\x1b[2m[jvm4l @ %.3fms] %s\x1b[0m", time_ms, message))
     end,
 
-    --jit_load = function(src: string, chunk_name: string): (...any) -> ...any
-    --    local luau = require("@std/luau")
-    --    local bc = luau.compile(src)
-    --    return luau.load(bc, chunk_name)
-    --end,
+    jit_load = function(src: string, chunk_name: string): (...any) -> ...any
+        local luau = require("@std/luau")
+        local bc = luau.compile(src)
+        return luau.load(bc, chunk_name)
+    end,
 
     --jit_load = function(src: string, chunk_name: string): (...any) -> ...any
     --    local luau = require("@std/luau")
@@ -65,9 +66,9 @@ local vm = jvm4l.Jvm.new({
 --print(vm:load_class("jvm4l/Luau"))
 
 local ok, err = pcall(function(...)
-    local Test = vm:load_class("jvm4l/Test")
+    local Test = vm:load_class("jvm4l/test/Test")
     local test_ref = Test:resolve_method("main", "()V")
-    --jit.try_compile(vm, Test:resolve_method("loop", "()I"))
+    jit.try_compile(vm, Test:resolve_method("loop", "()I"))
     Test:invoke_static(test_ref)
 end)
 

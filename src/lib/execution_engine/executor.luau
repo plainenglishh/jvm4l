@@ -67,11 +67,13 @@ local function unwind_thread(jvm: t.Jvm, thread: t.Thread, target: t.Invocation,
     error("unreachable")
 end
 
+local executor = {}
+
 --[=[
     Drive *all* threads execution until `target` completes or fails.
 ]=]
 @native
-local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
+function executor.execute_all(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
     jvm._exec_depth += 1
     dbg.trace(jvm, "entered execution engine #%i", jvm._exec_depth)
 
@@ -116,6 +118,56 @@ local function executor(jvm: t.Jvm, target: t.Invocation): (boolean, t.JvmValue)
     end
 
     dbg.trace(jvm, 'exited execution engine #%i (success=%*, value="%*")', jvm._exec_depth, target_ok, target_value)
+    jvm._exec_depth -= 1
+    return target_ok, target_value
+end
+
+--[=[
+    Drive *all* threads execution until `target` completes or fails.
+]=]
+@native
+function executor.execute_exclusive(jvm: t.Jvm, target: t.Invocation, depth: number): (boolean, t.JvmValue)
+    jvm._exec_depth += 1
+    dbg.trace(jvm, "entered exclusive execution engine #%i", jvm._exec_depth)
+    local thread = assert(jvm.current_thread, "no current thread to run execute_exclusive on")
+
+    local target_ok: boolean, target_value: t.JvmValue
+    while true do
+        if target.state == "complete" then
+            target_ok, target_value = true, target.value
+            break
+        elseif target.state == "failed" then
+            target_ok, target_value = false, target.exception
+            break
+        elseif #thread.stack < depth then
+            error("exclusive stack depth range left without completing invocation")
+        end
+
+        local ok, exception = xpcall(step :: any, function(value): t.JvmObject
+            if is_throwable(value, "java/lang/Throwable") then
+                return value :: t.JvmObject
+            else
+                return jvm:_create_internal_error(tostring(value), 2)
+            end
+        end, jvm)
+
+        if ok then
+            continue
+        end
+
+        local caught = unwind_thread(jvm, thread, target, exception)
+        if caught then
+            continue
+        end
+    end
+
+    dbg.trace(
+        jvm,
+        'exited exclusive execution engine #%i (success=%*, value="%*")',
+        jvm._exec_depth,
+        target_ok,
+        target_value
+    )
     jvm._exec_depth -= 1
     return target_ok, target_value
 end

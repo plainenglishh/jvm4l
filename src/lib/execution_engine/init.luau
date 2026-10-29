@@ -23,8 +23,16 @@ end
 --[=[
     Invokes `method` synchronously without performing dispatch logic.
     You must call `execution_engine.dispatch` before this to get the correct method, regardless of dispatch type.
+
+    **USE EXLCUSIVE MODE FOR ANY INVOCATIONS THAT CAN OCCUR UNDERNEATH A 
+    BYTECODE INSTRUCTION, SUCH AS CLASS INITIALISATION AND BOOTSTRAP METHODS.**
 ]=]
-function execution_engine.invoke_sync(jvm: t.Jvm, method: DispatchedMethodHandle, args: t.Arguments): t.JvmValue
+function execution_engine.invoke_sync(
+    jvm: t.Jvm,
+    method: DispatchedMethodHandle,
+    args: t.Arguments,
+    exclusive: boolean?
+): t.JvmValue
     local thread: t.Thread
     if jvm.current_thread then
         thread = jvm.current_thread
@@ -34,16 +42,23 @@ function execution_engine.invoke_sync(jvm: t.Jvm, method: DispatchedMethodHandle
         jvm.current_thread = thread
     end
 
-    local stack = thread.stack
-    local this_frame = stack[#stack]
-    if this_frame and this_frame.code.kind == "java" then
-        jvm:_internal_error("attempt to use `execution_engine.invoke_sync` in Java context, use invoke_inline")
-        error("^")
-    end
+    --local stack = thread.stack
+    --local this_frame = stack[#stack]
+    --if this_frame and this_frame.code.kind == "java" then
+    --    jvm:_internal_error("attempt to use `execution_engine.invoke_sync` in Java context, use invoke_inline")
+    --    error("^")
+    --end
 
     local invocation: t.Invocation = { state = "running" }
     frames.push_on(jvm, thread, method.method, invocation, args)
-    local ok, value_or_error = executor(jvm, invocation)
+    local ok, value_or_error
+    if exclusive then
+        local depth = #thread.stack
+        ok, value_or_error = executor.execute_exclusive(jvm, invocation, depth)
+    else
+        ok, value_or_error = executor.execute_all(jvm, invocation)
+    end
+
     if not ok then
         error(value_or_error)
     end

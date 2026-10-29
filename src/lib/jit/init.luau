@@ -17,13 +17,13 @@ function jit.try_compile(jvm: t.Jvm, method: t.MethodHandle)
         return
     end
 
-    local ok, src_or_reason = compile(method.info.code)
+    local ok, src_or_reason = compile(method)
     if not ok then
         dbg.trace(jvm, "unable to jit compile %s.%s: %s", method.class.fqcn, method.info.name, src_or_reason)
         return
     end
 
-    --require("@std/fs").writeStringToFile("jitout.luau", src_or_reason)
+    require("@std/fs").writeStringToFile("jitout.luau", src_or_reason)
 
     local jit_load = assert(jvm._settings.jit_load)
     local load_ok, loaded = pcall(jit_load, src_or_reason, "=jvm4l_jit")

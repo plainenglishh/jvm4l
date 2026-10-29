@@ -370,6 +370,7 @@ export type JvmClass = setmetatable<
         resolve_field: (self: JvmClass, name: string, descriptor: string) -> FieldHandle,
 
         invoke_static: (self: JvmClass, method: MethodHandle, ...JvmValue) -> JvmValue,
+        invoke_static_exclusive: (self: JvmClass, method: MethodHandle, ...JvmValue) -> JvmValue,
 
         -- Reflection
 
@@ -464,6 +465,7 @@ export type JvmObject = setmetatable<
         get_field: (self: JvmObject, field: FieldHandle) -> JvmValue,
         set_field: (self: JvmObject, field: FieldHandle, value: JvmValue) -> (),
         invoke: (self: JvmObject, method: MethodHandle, ...JvmValue) -> JvmValue,
+        invoke_exclusive: (self: JvmObject, method: MethodHandle, ...JvmValue) -> JvmValue,
 
         inner_string: (self: JvmObject) -> string,
         inner_thread: (self: JvmObject) -> Thread,

@@ -97,6 +97,13 @@ function JvmObject.invoke(self: t.JvmObject, method: t.MethodHandle, ...: t.JvmV
     return execution_engine.invoke_sync(self.jvm, dispatched_method, args)
 end
 
+function JvmObject.invoke_exclusive(self: t.JvmObject, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
+    local args: t.Arguments = table.pack(...)
+    table.insert(args, 1, self)
+    local dispatched_method = execution_engine.dispatch(self.jvm, method, "virtual", self.class, self)
+    return execution_engine.invoke_sync(self.jvm, dispatched_method, args, true)
+end
+
 function JvmObject.inner_string(self: t.JvmObject): string
     if not self._magic or self._magic.kind ~= "string" then
         error("not a string")

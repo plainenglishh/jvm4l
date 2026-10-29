@@ -377,7 +377,11 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
 
     if
         defining_loader == "bootstrap"
-        and (class.name == "java/lang/Object" or class:inherits_from(self:load_class("java/lang/Object", "bootstrap")))
+        and (
+            class.name == "java/lang/Object"
+            or class.name == "java/lang/Throwable"
+            or class:inherits_from(self:load_class("java/lang/Throwable", "bootstrap"))
+        )
     then
         assert_no_clinit(class)
     end

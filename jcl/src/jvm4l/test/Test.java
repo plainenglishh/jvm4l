@@ -1,4 +1,4 @@
-package jvm4l;
+package jvm4l.test;
 
 import static jvm4l.luau.Globals.error;
 

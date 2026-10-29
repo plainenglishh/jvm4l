@@ -15,10 +15,6 @@ local t = require("../t")
 type OpTargets = (op: number, code: buffer, pc: number, start_pc: number, wide: boolean) -> ({ number }, number)
 type OpTargetsGenerator<T...> = (T...) -> OpTargets
 
-local function sign_extend_byte(byte: number): number
-    return if byte >= 0x80 then byte - 0x100 else byte
-end
-
 local function sign_extend_short(short: number): number
     return if short >= 0x8000 then short - 0x10000 else short
 end
@@ -58,7 +54,7 @@ do
         end
     end
 
-    local function can_break(size: number)
+    local function will_break(size: number)
         return function(_, code: buffer, pc: number, start_pc: number): ({ number }, number)
             return { start_pc + size }, start_pc + size
         end
@@ -79,18 +75,16 @@ do
     set_range(0xAC, 0xB1, no_targets, 1)
     set_range(0xB4, 0xB5, no_targets, 3)
     TARGETS[0xBF] = no_targets(1)
+    TARGETS[0x12] = no_targets(2)
+    TARGETS[0xBB] = no_targets(3)
+    set_range(0xB2, 0xB3, no_targets, 3)
 
-    -- `ldc`
-    TARGETS[0x12] = can_break(2)
     -- `if<cond>`, `if_icmp<cond>`
     set_range(0x99, 0xA4, i16, 1)
+    -- `goto`
     TARGETS[0xA7] = i16(1)
-    -- `getstatic`, `putstatic`
-    set_range(0xB2, 0xB3, can_break, 3)
     -- `invokevirtual`, `invokespecial`, `invokestatic`
-    set_range(0xB6, 0xB8, can_break, 3)
-    -- `new
-    TARGETS[0xBB] = can_break(3)
+    set_range(0xB6, 0xB8, will_break, 3)
 end
 
 local function get_targets(code: t.MethodCodeJava): { number } | string
