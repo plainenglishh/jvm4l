@@ -5,12 +5,40 @@ local ConstantPool = {}
 ConstantPool.__index = ConstantPool
 
 function ConstantPool.new(class: t.JvmClass): t.ConstantPool
-    return table.freeze(setmetatable({
+    local classfile = assert(class._classfile, `class has no class file`)
+    local self: t.ConstantPool = setmetatable({
         _jvm = class.jvm,
         _class = class,
-        _classfile = assert(class._classfile, `class has no class file`),
+        _classfile = classfile,
         _resolved = {},
-    }, ConstantPool))
+        _types = {},
+    }, ConstantPool)
+
+    for i, cp_info in classfile.constant_pool do
+        local ktype: t.ConstantValueType
+        if cp_info.tag == "Class" then
+            ktype = "class"
+        elseif cp_info.tag == "Fieldref" then
+            ktype = "field"
+        elseif cp_info.tag == "Methodref" then
+            ktype = "method"
+        elseif cp_info.tag == "InterfaceMethodref" then
+            ktype = "method"
+        elseif cp_info.tag == "String" then
+            ktype = "string"
+        elseif cp_info.tag == "Integer" then
+            ktype = "int"
+        elseif cp_info.tag == "Float" then
+            ktype = "float"
+        elseif cp_info.tag == "Double" then
+            ktype = "double"
+        elseif cp_info.tag == "Long" then
+            ktype = "long"
+        end
+        self._types[i] = ktype
+    end
+
+    return table.freeze(self) :: t.ConstantPool
 end
 
 function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantValue
@@ -74,14 +102,15 @@ function ConstantPool._resolve(self: t.ConstantPool, idx: number): t.ConstantVal
 end
 
 function ConstantPool.is(self: t.ConstantPool, idx: number, type: t.ConstantValueType): boolean
-    return self:_resolve(idx).type == type
+    return self._types[idx] == type
 end
 
 function ConstantPool.get(self: t.ConstantPool, idx: number, type: t.ConstantValueType): any
-    local value = self:_resolve(idx)
-    if value.type ~= type then
-        error(`expected constant #{idx} to be {type}, got {value.type}`, 2)
+    if not self:is(idx, type) then
+        error(`expected constant #{idx} to be {type}, got {self._types[idx]}`, 2)
     end
+
+    local value = self:_resolve(idx)
     return value.value
 end
 

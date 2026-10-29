@@ -4,6 +4,8 @@
 
 ## Short Term Goals
 
+- [ ] internal fatal errors that halt the VM entirely, and shut it down w/o any unwinding (call it panic maybe?). permit no operations after this
+    - [ ] jvm wide 'state' = "alive" | "dead" | "panicked", with preserved reason, and a jvm:assert_alive method that throws and reports reason
 - [ ] move some work (e.g. resolution) out of `Jvm`. it shouldnt be a god class!
 - [ ] threading:
     - [X] current_thread no longer always set, create ephemeral thread for host side :invoke if none are set
@@ -31,14 +33,13 @@
     - [X] `aconst_null`, `aconst_<n>`, `lconst_<n>`, `fconst_<n>`, `dconst_<n>`, `bipush`, `sipush`, `ldc`
     - [X] `aload_i`, `astore_i`
     - [X] `putfield`, `getfield`, `putstatic`, `getstatic`
-    - [X] `invokespecial`, `invokestatic`
+    - [X] `invokespecial`, `invokestatic`, `invokevirtual`
     - [X] `return`, `ireturn`, `areturn`, `freturn`, `lreturn`, `dreturn`
     - [X] `goto`
-    - [ ] `iadd`, `isub`, `iinc`
-    - [ ] `if_icmpge`, `ifeq`
-    - [ ] `new`
-
-invokevirtual
+    - [X] `iadd`, `isub`, `iinc`
+    - [X] `if_icmp<cond>`, `ifeq`
+    - [X] `new`
+    - [X] `dup`
 - [ ] proof of concept JIT
     - transpile java bytecode into luau source code to be loaded by a host provided 'load' function.
     - split into basic blocks, use trampoline for gotos
@@ -49,6 +50,7 @@ invokevirtual
     - [X] track all JvmObjects
     - [ ] trace references (inc. weak references), and mark unreachable objects for deletion
     - [ ] delete objects by calling its finaliser (which can prevent deletion), and dropping the object from the GC tracking table to allow the Luau GC to properly deallocate it
+- [ ] skip constructor frames in throwable backtrace generation
 
 ## Long Term Goals
 

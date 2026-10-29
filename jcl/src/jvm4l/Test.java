@@ -13,11 +13,16 @@ public class Test {
 
     public static native void print_int(int value);
 
-    public static void main() {
+    private static int loop() {
         int i = 0;
         while (i < 1000000) {
             i++;
         }
-        print_int(i);
+        return i;
+    }
+
+    public static void main() throws Exception {
+        int value = loop();
+        print_int(value);
     }
 }

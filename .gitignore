@@ -1,3 +1,5 @@
 jcl/bin/
 jcl/docs/
-oldsrc/
+*.javap
+jitout.luau
+*.out

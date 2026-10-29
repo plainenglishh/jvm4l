@@ -129,7 +129,8 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
     stack[#stack] = nil
 
     if parent_frame and parent_frame.code.kind == "java" and count == 1 then
-        table.insert(parent_frame.stack, value)
+        parent_frame.sp += 1
+        parent_frame.stack[parent_frame.sp] = value
     end
 end
 

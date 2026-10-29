@@ -1,5 +1,6 @@
 --!native
 local dbg = require("../dbg")
+local jvm_type = require("../jvm_type")
 local t = require("../t")
 local util = require("../util")
 local dispatcher = require("./dispatcher")
@@ -38,7 +39,7 @@ local function not_null(jvm: t.Jvm, value: t.JvmObjectRef): t.JvmObject
     return value
 end
 
-local LONG_SLOT_MARKER = newproxy(false)
+local LONG_SLOT_MARKER: any = "__LONG_MARKER__"
 
 local function push(f: t.StackFrameJava, value: t.JvmValue, slots: number)
     local stack = f.stack
@@ -132,6 +133,12 @@ local function supports_wide(op: number): boolean
         or op == 0x84
 end
 
+local OP_DISPATCH_MAP: { [number]: dispatcher.DispatchType } = {
+    [0xB6] = "virtual",
+    [0xB7] = "special",
+    [0xB8] = "static",
+}
+
 local function is_throwable(value: unknown): boolean
     if not util.is_object(value) then
         return false
@@ -190,6 +197,14 @@ local function conf_if(cond: number, v1: number, v2: number): boolean
     error("")
 end
 
+local function wrap_int(n: number)
+    local u32 = bit32.band(n, 0xFFFFFFFF)
+    if u32 >= 0x80000000 then
+        return u32 - 0x100000000
+    end
+    return u32
+end
+
 --[=[ 
     Execute a single VM step (a native call, or a burst of bytecode 
     instructions)
@@ -221,6 +236,21 @@ local function step(jvm: t.Jvm)
         return frame.return_from_current_frame(jvm, thread, if method.type:get().returns == "void" then 0 else 1, value)
     end
 
+    local jit = f.code.jit
+    if jit then
+        local exit_reason, value = jit(jvm, thread, f)
+        if exit_reason == "break" then
+            return
+        elseif exit_reason == "return" then
+            return frame.return_from_current_frame(
+                jvm,
+                thread,
+                if method.type:get().returns == "void" then 0 else 1,
+                value
+            )
+        end
+    end
+
     local class = f.class
     local k = f.constants
     local code = f.code.code
@@ -238,7 +268,7 @@ local function step(jvm: t.Jvm)
         return value
     end
 
-    local burst_initial_depth = #thread.stack
+    local inital_stack_depth = #thread.stack
     local burst_count = 100 -- use budget later
 
     for i = 1, burst_count do
@@ -259,32 +289,20 @@ local function step(jvm: t.Jvm)
 
         if op == 0x00 then -- `nop`
             -- do nothing
-        elseif op <= 0x0F then -- constant loads
-            local value: t.JvmValue, slots: number
-
-            if op == 0x01 then -- `aconst_null`
-                value, slots = nil, 1
-            elseif op >= 0x02 and op <= 0x08 then -- `aconst_<n>`
-                value, slots = op - 0x03, 1
-            elseif op >= 0x09 and op <= 0x0A then -- `lconst_<n>`
-                value, slots = integer.create(op - 0x09), 2
-            elseif op >= 0x0B and op <= 0x0D then -- `fconst_<n>`
-                value, slots = op - 0x0B, 1
-            elseif op >= 0x0E and op <= 0x0F then -- `dconst_<n>`
-                value, slots = op - 0x0E, 2
-            end
-
-            push(f, value, slots)
-        elseif op <= 0x11 then -- immediate constant loads
-            local value: number
-
-            if op == 0x10 then -- `bipush`
-                value = sign_extend_byte(fetch_u8())
-            elseif op == 0x11 then -- `sipush`
-                value = sign_extend_short(fetch_u16())
-            end
-
-            push(f, value, 1)
+        elseif op == 0x01 then -- `aconst_null`
+            push(f, nil, 1)
+        elseif op >= 0x02 and op <= 0x08 then -- `aconst_<n>`
+            push(f, op - 0x03, 1)
+        elseif op >= 0x09 and op <= 0x0A then -- `lconst_<n>`
+            push(f, integer.create(op - 0x09), 2)
+        elseif op >= 0x0B and op <= 0x0D then -- `fconst_<n>`
+            push(f, op - 0x0B, 1)
+        elseif op >= 0x0E and op <= 0x0F then -- `dconst_<n>`
+            push(f, op - 0x0E, 2)
+        elseif op == 0x10 then -- `bipush`
+            push(f, sign_extend_byte(fetch_u8()), 1)
+        elseif op == 0x11 then -- `sipush`
+            push(f, sign_extend_short(fetch_u16()), 1)
         elseif op == 0x12 then -- `ldc`
             local idx = fetch_u8()
             local value: t.JvmValue
@@ -302,28 +320,42 @@ local function step(jvm: t.Jvm)
             end -- todo(dynamic): MethodType and MethodHandle
 
             push(f, value, 1)
+
+            if inital_stack_depth ~= #thread.stack then
+                break
+            end
         elseif op >= 0x1A and op <= 0x1D then -- `iload_<n>`
-            local idx = op - 0x1A
-            local value = get_local(f, idx)
-            push(f, value, 1)
+            push(f, get_local(f, op - 0x1A), 1)
         elseif op >= 0x2A and op <= 0x2D then -- `aload_<n>`
-            local idx = op - 0x2A
-            local value = get_local(f, idx)
-            push(f, value, 1)
+            push(f, get_local(f, op - 0x2A), 1)
         elseif op >= 0x3B and op <= 0x3E then -- `istore_<n>`
-            local idx = op - 0x3B
-            local value = pop(f, 1)
-            set_local(f, idx, value)
+            set_local(f, op - 0x3B, pop(f, 1))
         elseif op >= 0x4B and op <= 0x4E then -- `astore_<n>`
-            local idx = op - 0x4B
+            set_local(f, op - 0x4B, pop(f, 1))
+        elseif op == 0x59 then -- `dup`
             local value = pop(f, 1)
-            set_local(f, idx, value)
+            push(f, value, 1)
+            push(f, value, 1)
+        elseif op == 0x60 then -- `iadd`
+            local v2, v1 = pop(f, 1) :: number, pop(f, 1) :: number
+            push(f, wrap_int(v1 + v2), 1)
+        elseif op == 0x64 then -- `isub`
+            local v2, v1 = pop(f, 1) :: number, pop(f, 1) :: number
+            push(f, wrap_int(v1 - v2), 1)
         elseif op == 0x84 then -- `iinc`
             local idx = fetch_u8()
-            local const = sign_extend_byte(fetch_u8())
+            local by = sign_extend_byte(fetch_u8())
             local value = get_local(f, idx) :: number
-            value += const
-            set_local(f, idx, value)
+            set_local(f, idx, wrap_int(value + by))
+        elseif op >= 0x99 and op <= 0x9E then -- `if<cond>`
+            local cond = op - 0x99
+            local offset = sign_extend_short(fetch_u16())
+            local value1 = pop(f, 1) :: number
+
+            local taken = conf_if(cond, value1, 0)
+            if taken then
+                pc = start_pc + offset
+            end
         elseif op >= 0x9F and op <= 0xA4 then -- `if_icmp<cond>`
             local cond = op - 0x9F
             local offset = sign_extend_short(fetch_u16())
@@ -333,43 +365,86 @@ local function step(jvm: t.Jvm)
             if taken then
                 pc = start_pc + offset
             end
+        elseif op == 0xA7 then -- `goto`
+            local offset = sign_extend_short(fetch_u16())
+            pc = start_pc + offset
+        elseif op == 0xB2 then -- `getstatic`
+            local idx = fetch_u16()
+            local field = k:get(idx, "field")
+            local slots = jvm_type.words(field.info.type:get())
+            local value = field.class:get_static_field(field)
+            push(f, value, slots)
+
+            if inital_stack_depth ~= #thread.stack then
+                break
+            end
+        elseif op == 0xB3 then -- `putstatic`
+            local idx = fetch_u16()
+            local field = k:get(idx, "field")
+            local value = pop(f)
+            field.class:set_static_field(field, value)
+
+            if inital_stack_depth ~= #thread.stack then
+                break
+            end
+        elseif op == 0xB4 then -- `getfield`
+            local idx = fetch_u16()
+            local field = k:get(idx, "field")
+            local slots = jvm_type.words(field.info.type:get())
+            local object = not_null(jvm, pop(f) :: t.JvmObjectRef)
+            local value = object:get_field(field)
+            push(f, value, slots)
         elseif op == 0xB5 then -- `putfield`
             local idx = fetch_u16()
             local field = k:get(idx, "field")
             local value = pop(f)
             local object = not_null(jvm, pop(f) :: t.JvmObjectRef)
             object:set_field(field, value)
-        elseif op == 0xB7 then -- `invokespecial`
-            local idx = fetch_u16()
-            local method = k:get(idx, "method")
-            local arg_count = #method.info.type:get().arguments + 1
-            local args = pop_n(f, arg_count, true) :: t.Arguments
-            args.n = arg_count
-            local dispatched_method = dispatcher.dispatch(jvm, method, "special", class)
-            invoke_inline(jvm, dispatched_method, args)
-        elseif op == 0xB8 then -- `invokestatic`
+        elseif op >= 0xB6 and op <= 0xB8 then -- `invokevirtual`, `invokestatic`, `invokespecial`
+            local dispatch_type = OP_DISPATCH_MAP[op]
+
             local idx = fetch_u16()
             local method = k:get(idx, "method")
             local arg_count = #method.info.type:get().arguments
+            if op ~= 0xB8 then
+                arg_count += 1
+            end
             local args = pop_n(f, arg_count, true) :: t.Arguments
             args.n = arg_count
-            local dispatched_method = dispatcher.dispatch(jvm, method, "static", class)
+            local dispatched_method = dispatcher.dispatch(jvm, method, dispatch_type, class)
             invoke_inline(jvm, dispatched_method, args)
-        elseif op == 0xAC or op == 0xB0 or op == 0xAE then -- `ireturn`, `areturn`, `freturn`
-            frame.return_from_current_frame(jvm, thread, 1, pop(f, 1))
-        elseif op == 0xAD or op == 0xAF then -- `lreturn`, `dreturn`
-            frame.return_from_current_frame(jvm, thread, 1, pop(f, 2))
-        elseif op == 0xB1 then -- `return`
-            frame.return_from_current_frame(jvm, thread, 0, nil)
-        elseif op == 0xA7 then -- `goto`
-            local offset = sign_extend_short(fetch_u16())
-            pc = start_pc + offset
+            break
+        elseif op == 0xB0 or op == 0xB1 or (op >= 0xAC and op <= 0xAF) then -- `areturn`, `return`, `ireturn` `freturn`, `lreturn`, `dreturn`
+            local value: t.JvmValue, count: number
+
+            if op == 0xAD or op == 0xAF then
+                value = pop(f, 2)
+                count = 1
+            elseif op == 0xB1 then
+                value = nil
+                count = 0
+            else
+                value = pop(f, 1)
+                count = 1
+            end
+
+            frame.return_from_current_frame(jvm, thread, count, value)
+            break
+        elseif op == 0xBB then -- `new`
+            local idx = fetch_u16()
+            local class = k:get(idx, "class")
+            push(f, class:_new_uninitialised(), 1)
+
+            if inital_stack_depth ~= #thread.stack then
+                break
+            end
+        elseif op == 0xBF then -- `athrow`
+            -- TODO: synchronisation
+            local obj = not_null(jvm, pop(f, 1) :: t.JvmObjectRef)
+            error(obj, 0)
+            -- will break by nature of error
         else
             jvm:_internal_error(string.format("unimplemented opcode 0x%02X", op))
-        end
-
-        if burst_initial_depth ~= #thread.stack then
-            break
         end
     end
 

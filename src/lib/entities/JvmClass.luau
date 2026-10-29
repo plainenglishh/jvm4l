@@ -110,6 +110,7 @@ end
 
 function JvmClass._new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t.JvmObject
     assert(self._state ~= "error")
+    self:_ensure_initialised()
     return JvmObject._new(self.jvm, self, magic)
 end
 

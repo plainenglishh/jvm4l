@@ -1,3 +1,5 @@
+local Lazy = require("./utilities/Lazy")
+
 --[=[
 	Private items are specified with the `_` prefix. Privacy is module-wide; 
 	that is, a private item is accessible to any file within `src/lib`, not just
@@ -84,16 +86,7 @@ function t.Monitor(): Monitor
     return { held_by = nil, held_by_depth = 0, waiting = {} }
 end
 
---- A lazily loaded value.
-export type Lazy<T> = setmetatable<{
-    _init: () -> T,
-    _ready: boolean,
-    _value: T?,
-}, {
-    __index: getmetatable<Lazy<T>>,
-    new: (init: () -> T) -> Lazy<T>,
-    get: (self: Lazy<T>) -> T,
-}>
+export type anyfunction = (...any) -> ...any
 
 --------------------------------------------------------------------------------
 -- Root JVM
@@ -177,6 +170,7 @@ export type IntoJvmSettings = {
     interrupt: InterruptCallback?,
     link_native: LinkNativeCallback,
     trace: TraceCallback?,
+    jit_load: JitLoadCallback?,
 }
 
 --- Resolved version of `IntoJvmSettings`.
@@ -185,6 +179,7 @@ export type _JvmSettings = {
     interrupt: InterruptCallback?,
     link_native: LinkNativeCallback,
     trace: TraceCallback?,
+    jit_load: JitLoadCallback?,
 }
 
 --- Callback used to link native methods.
@@ -193,6 +188,8 @@ export type LinkNativeCallback = (class_name: string, signature: string) -> Nati
 export type InterruptCallback = (jvm: Jvm) -> ()
 --- Callback used to emit internal debug traces.
 export type TraceCallback = (message: string) -> ()
+--- Callback used to load generated JIT chunks.
+export type JitLoadCallback = (src: string, chunk_name: string) -> anyfunction
 
 --- A reference to a class loader. Either "bootstrap", or a reference to a user-defined loader.
 export type JvmClassLoader = "bootstrap" | JvmObject
@@ -247,7 +244,13 @@ export type StackFrameJava = {
     pc: number,
     start_pc: number,
     read invocation: Invocation?,
+    read jit: JitStep?,
 }
+
+export type JitExitReason = "break" | "return"
+
+--- A JIT compiled method.
+export type JitStep = (jvm: Jvm, thread: Thread, frame: StackFrameJava) -> (JitExitReason, JvmValue)
 
 export type StackFrameLuau = {
     read kind: "luau",
@@ -401,6 +404,7 @@ export type ConstantPool = setmetatable<
         read _class: JvmClass,
         read _classfile: Classfile,
         read _resolved: { [number]: ConstantValue },
+        _types: { [number]: ConstantValueType },
     },
     {
         read __index: getmetatable<ConstantPool>,
@@ -507,7 +511,7 @@ export type FieldInfo = {
     read name: string,
     read descriptor: string,
     read signature: string,
-    read type: Lazy<JvmType>,
+    read type: Lazy.Lazy<JvmType>,
 
     read public: boolean,
     read private: boolean,
@@ -539,7 +543,7 @@ export type MethodInfo = {
     read descriptor: string,
     read signature: string,
     read code: MethodCode,
-    read type: Lazy<JvmMethodType>,
+    read type: Lazy.Lazy<JvmMethodType>,
 
     read public: boolean,
     read private: boolean,
@@ -592,6 +596,7 @@ export type MethodCodeJava = {
     read code: buffer,
     read exceptions: ExceptionTable,
     read line_numbers: LineNumberTable?,
+    jit: JitStep?,
 }
 
 export type LineNumberTable = { LineNumberTableEntry }

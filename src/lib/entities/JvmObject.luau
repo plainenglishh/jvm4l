@@ -78,12 +78,12 @@ function JvmObject.implements(self: t.JvmObject, interface: t.JvmClass): boolean
 end
 
 function JvmObject.get_field(self: t.JvmObject, field: t.FieldHandle): t.JvmValue
-    assert(self:instance_of(field.class))
+    assert(self:instance_of(field.class)) -- IS THIS RIGHT?
     return self._field_values[field]
 end
 
 function JvmObject.set_field(self: t.JvmObject, field: t.FieldHandle, value: t.JvmValue)
-    assert(self:instance_of(field.class))
+    assert(self:instance_of(field.class)) -- IS THIS RIGHT?
     if not typechecker.check_field(self.jvm, value, self.class, field.info) then
         self.jvm:throw_exception("java/lang/IllegalArgumentException")
     end

@@ -5,7 +5,7 @@ local native_methods = require("../native_methods")
 local t = require("../t")
 local util = require("../util")
 local GarbageCollector = require("../GarbageCollector")
-local Lazy = require("../Lazy")
+local Lazy = require("../utilities/Lazy")
 local dbg = require("../dbg")
 local JvmClass = require("./JvmClass")
 
@@ -88,6 +88,7 @@ local function get_members(
                 code = code_attribute.code,
                 exceptions = exceptions,
                 line_numbers = line_numbers,
+                jit = nil,
             }
         end
 
@@ -95,7 +96,7 @@ local function get_members(
             name = name,
             descriptor = descriptor,
             signature = signature,
-            code = code,
+            code = code :: t.MethodCode,
             type = Lazy.new(function()
                 return jvm_type.resolve_method_descriptor(jvm, descriptor, defining_loader)
             end),
@@ -195,6 +196,7 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
         interrupt = into_settings.interrupt,
         link_native = into_settings.link_native,
         trace = into_settings.trace,
+        jit_load = into_settings.jit_load,
     }
 
     local self: t.Jvm = setmetatable({
@@ -320,6 +322,20 @@ function Jvm.load_class(self: t.Jvm, name: string, initiating_loader: t.JvmClass
     return class_o:inner_class()
 end
 
+local function assert_no_clinit(class: t.JvmClass)
+    for i, v in class._methods do
+        if v.name == "<clinit>" then
+            error(
+                "<clinit> cannot appear in this class. this is an issue with the Jvm4L JCL, not user code. contact the developer!"
+            )
+        end
+    end
+
+    if class.super then
+        assert_no_clinit(class.super)
+    end
+end
+
 function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.JvmClassLoader): t.JvmClass
     local parse_ok, classfile = pcall(class_parser.parse, classfile)
     if not parse_ok then
@@ -358,6 +374,14 @@ function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.Jvm
         classfile,
         source_file
     )
+
+    if
+        defining_loader == "bootstrap"
+        and (class.name == "java/lang/Object" or class:inherits_from(self:load_class("java/lang/Object", "bootstrap")))
+    then
+        assert_no_clinit(class)
+    end
+
     register_class(self, defining_loader, class)
 
     dbg.trace(self, "loaded class %s from loader %*", this_class_name, defining_loader)
@@ -490,7 +514,12 @@ function Jvm.create_exception(
     cause: t.JvmObject?,
     skip_stack_capture: boolean?
 ): t.JvmObject
-    local Exception = self:load_class(name)
+    local root_package = string.match(name, "(.-)/")
+    if root_package ~= "java" and root_package ~= "jvm4l" then
+        error("only JCL exceptions can be created via `Jvm.create_exception`.")
+    end
+
+    local Exception = self:load_class(name, "bootstrap")
     local message = if message then self:create_string(message) else nil
 
     local magic: t._MagicValue?

@@ -1,4 +1,5 @@
 print("-----")
+
 local jvm4l = require("./src/lib")
 
 local function link_native(class_name: string, signature: string): jvm4l.NativeMethod?
@@ -34,6 +35,22 @@ local vm = jvm4l.Jvm.new({
         local time_ms = (os.clock() - epoch) * 1000
         print(string.format("\x1b[2m[jvm4l @ %.3fms] %s\x1b[0m", time_ms, message))
     end,
+
+    --jit_load = function(src: string, chunk_name: string): (...any) -> ...any
+    --    local luau = require("@std/luau")
+    --    local bc = luau.compile(src)
+    --    return luau.load(bc, chunk_name)
+    --end,
+
+    --jit_load = function(src: string, chunk_name: string): (...any) -> ...any
+    --    local luau = require("@std/luau")
+    --    return function()
+    --        return luau.eval(src, {
+    --            name = chunk_name,
+    --            stdlib = "Safe",
+    --        })
+    --    end
+    --end,
 })
 
 --local Object = vm:load_class("java/lang/Object")
@@ -50,6 +67,7 @@ local vm = jvm4l.Jvm.new({
 local ok, err = pcall(function(...)
     local Test = vm:load_class("jvm4l/Test")
     local test_ref = Test:resolve_method("main", "()V")
+    --jit.try_compile(vm, Test:resolve_method("loop", "()I"))
     Test:invoke_static(test_ref)
 end)
 
