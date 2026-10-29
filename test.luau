@@ -37,11 +37,11 @@ local vm = jvm4l.Jvm.new({
         print(string.format("\x1b[2m[jvm4l @ %.3fms] %s\x1b[0m", time_ms, message))
     end,
 
-    jit_load = function(src: string, chunk_name: string): (...any) -> ...any
-        local luau = require("@std/luau")
-        local bc = luau.compile(src)
-        return luau.load(bc, chunk_name)
-    end,
+    --jit_load = function(src: string, chunk_name: string): (...any) -> ...any
+    --    local luau = require("@std/luau")
+    --    local bc = luau.compile(src)
+    --    return luau.load(bc, chunk_name)
+    --end,
 
     --jit_load = function(src: string, chunk_name: string): (...any) -> ...any
     --    local luau = require("@std/luau")
@@ -68,7 +68,7 @@ local vm = jvm4l.Jvm.new({
 local ok, err = pcall(function(...)
     local Test = vm:load_class("jvm4l/test/Test")
     local test_ref = Test:resolve_method("main", "()V")
-    jit.try_compile(vm, Test:resolve_method("loop", "()I"))
+    --jit.try_compile(vm, Test:resolve_method("loop", "()I"))
     Test:invoke_static(test_ref)
 end)
 

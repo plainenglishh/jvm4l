@@ -268,9 +268,7 @@ local function step(jvm: t.Jvm)
         return value
     end
 
-    local inital_stack_depth = #thread.stack
     local burst_count = 100 -- use budget later
-
     for i = 1, burst_count do
         local start_pc = pc
         f.start_pc = start_pc -- cache now because its used for debugging
@@ -320,10 +318,6 @@ local function step(jvm: t.Jvm)
             end -- todo(dynamic): MethodType and MethodHandle
 
             push(f, value, 1)
-
-            if inital_stack_depth ~= #thread.stack then
-                break
-            end
         elseif op >= 0x1A and op <= 0x1D then -- `iload_<n>`
             push(f, get_local(f, op - 0x1A), 1)
         elseif op >= 0x2A and op <= 0x2D then -- `aload_<n>`
@@ -374,19 +368,11 @@ local function step(jvm: t.Jvm)
             local slots = jvm_type.words(field.info.type:get())
             local value = field.class:get_static_field(field)
             push(f, value, slots)
-
-            if inital_stack_depth ~= #thread.stack then
-                break
-            end
         elseif op == 0xB3 then -- `putstatic`
             local idx = fetch_u16()
             local field = k:get(idx, "field")
             local value = pop(f)
             field.class:set_static_field(field, value)
-
-            if inital_stack_depth ~= #thread.stack then
-                break
-            end
         elseif op == 0xB4 then -- `getfield`
             local idx = fetch_u16()
             local field = k:get(idx, "field")
@@ -434,10 +420,6 @@ local function step(jvm: t.Jvm)
             local idx = fetch_u16()
             local class = k:get(idx, "class")
             push(f, class:_new_uninitialised(), 1)
-
-            if inital_stack_depth ~= #thread.stack then
-                break
-            end
         elseif op == 0xBF then -- `athrow`
             -- TODO: synchronisation
             local obj = not_null(jvm, pop(f, 1) :: t.JvmObjectRef)
