@@ -1,7 +1,6 @@
 local class_parser = require("./class_parser")
 local dbg = require("./dbg")
 local JvmClass = require("./entities/JvmClass")
-local transpiler = require("./ir/transpiler")
 local jcl_classfiles = require("./jcl_classfiles")
 local jvm_type = require("./jvm_type")
 local t = require("./t")
@@ -127,7 +126,7 @@ local function add_members_from_classfile(
     end
 end
 
-local ARRAY_METHODS = {}
+local ARRAY_METHODS: { t.MethodInfo } = {}
 
 local function register_class(self: t.Jvm, defining_loader: t.JvmClassLoader, class: t.JvmClass)
     if not self._classes[defining_loader] then
@@ -194,7 +193,9 @@ function loader.get_array_class(self: t.Jvm, name: string, initiating_loader: t.
 
     local Object = self._classes.bootstrap["java/lang/Object"]
     local class = JvmClass._prepare(self, defining_loader, name, Object, {}, 0x0001)
-    --- add methods later
+    for _, method in ARRAY_METHODS do
+        class:_add_method(method)
+    end
     register_class(self, defining_loader, class)
     dbg.trace(self, "created array class %s", name)
     return class
