@@ -242,12 +242,11 @@ export type StackFrameJava = {
     read class: JvmClass,
     read constants: ConstantPool,
     read code: MethodCodeJava,
-    read stack: { JvmValue },
-    read locals: { JvmValue },
-    sp: number,
-    pc: number,
+    read registers: { JvmValue },
     start_pc: number,
+    pc: number,
     read invocation: Invocation?,
+    read return_to: number?,
     read jit: JitStep?,
 }
 
@@ -263,6 +262,7 @@ export type StackFrameLuau = {
     read code: MethodCodeLuau,
     read args: { JvmValue },
     read invocation: Invocation?,
+    read return_to: number?,
 }
 
 --- Invocation token used as executor targets to get method return values synchronously.

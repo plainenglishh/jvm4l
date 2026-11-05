@@ -1,7 +1,6 @@
 --!native
 local dbg = require("../dbg")
 local ir = require("../ir")
-local jvm_type = require("../jvm_type")
 local t = require("../t")
 local util = require("../util")
 local dispatcher = require("./dispatcher")
@@ -11,7 +10,12 @@ local frame = require("./frame")
     Invokes `method` inline without performing dispatch logic.
     You must call `dispatcher.dispatch` before this to get the correct method, regardless of dispatch type.
 ]=]
-local function invoke_inline(jvm: t.Jvm, method: dispatcher.DispatchedMethodHandle, args: t.Arguments)
+local function invoke_inline(
+    jvm: t.Jvm,
+    method: dispatcher.DispatchedMethodHandle,
+    args: t.Arguments,
+    return_to: number?
+)
     local thread = jvm.current_thread
     assert(thread)
 
@@ -25,11 +29,7 @@ local function invoke_inline(jvm: t.Jvm, method: dispatcher.DispatchedMethodHand
         error("^")
     end
 
-    frame.push_on(jvm, thread, method.method, nil, args)
-end
-
-local function read_u16be(b: buffer, offset: number): number
-    return bit32.rshift(bit32.byteswap(buffer.readu16(b, offset)), 16)
+    frame.push_on(jvm, thread, method.method, nil, args, return_to)
 end
 
 local function not_null(jvm: t.Jvm, value: t.JvmObjectRef): t.JvmObject
@@ -39,106 +39,6 @@ local function not_null(jvm: t.Jvm, value: t.JvmObjectRef): t.JvmObject
 
     return value
 end
-
-local LONG_SLOT_MARKER: any = "__LONG_MARKER__"
-
-local function push(f: t.StackFrameJava, value: t.JvmValue, slots: number)
-    local stack = f.stack
-
-    local top = f.sp + 1
-    stack[top] = value
-
-    if slots == 2 then
-        top += 1
-        stack[top] = LONG_SLOT_MARKER
-    end
-
-    f.sp = top
-end
-
-local function pop(f: t.StackFrameJava, slots: number?): (t.JvmValue, number)
-    local stack = f.stack
-    local top = f.sp
-
-    local val = stack[top]
-    stack[top] = nil
-    top -= 1
-
-    if slots == 2 then
-        if val ~= LONG_SLOT_MARKER then
-            error("expected 2-slot value")
-        end
-        local real_val = stack[top]
-        stack[top] = nil
-        top -= 1
-        f.sp = top
-        return real_val, 2
-    elseif slots == 1 then
-        if val == LONG_SLOT_MARKER then
-            error("expected 1-slot")
-        end
-        f.sp = top
-        return val, 1
-    else
-        if val == LONG_SLOT_MARKER then
-            local real_val = stack[top]
-            stack[top] = nil
-            top -= 1
-            f.sp = top
-            return real_val, 2
-        end
-        f.sp = top
-        return val, 1
-    end
-end
-
-local function pop_n(f: t.StackFrameJava, n: number, reverse: boolean): { t.JvmValue }
-    local out = table.create(n)
-
-    for i = 1, n do
-        local value = pop(f)
-        if reverse then
-            table.insert(out, 1, value)
-        else
-            table.insert(out, value)
-        end
-    end
-
-    return out :: { t.JvmValue }
-end
-
-local function get_local(f: t.StackFrame, idx: number): t.JvmValue
-    assert(f.code.kind == "java")
-    local value = f.locals[idx + 1]
-    -- dont check, null references are allowed
-    return value
-end
-
-local function set_local(f: t.StackFrame, idx: number, value: t.JvmValue)
-    assert(f.code.kind == "java")
-    f.locals[idx + 1] = value
-end
-
-local function supports_wide(op: number): boolean
-    return op == 0x15
-        or op == 0x17
-        or op == 0x19
-        or op == 0x16
-        or op == 0x18
-        or op == 0x36
-        or op == 0x38
-        or op == 0x3a
-        or op == 0x37
-        or op == 0x39
-        or op == 0xa9
-        or op == 0x84
-end
-
-local OP_DISPATCH_MAP: { [number]: dispatcher.DispatchType } = {
-    [0xB6] = "virtual",
-    [0xB7] = "special",
-    [0xB8] = "static",
-}
 
 local function is_throwable(value: unknown): boolean
     if not util.is_object(value) then
@@ -171,16 +71,8 @@ local function coerce_error(jvm: t.Jvm, e: unknown, invoke_depth: number): t.Jvm
     return jvm:create_exception("jvm4l/luau/LuauError", `{message}\n{traceback}`, nil, false)
 end
 
-local function sign_extend_byte(byte: number): number
-    return if byte >= 0x80 then byte - 0x100 else byte
-end
-
-local function sign_extend_short(short: number): number
-    return if short >= 0x8000 then short - 0x10000 else short
-end
-
 --- compares `int`, `float` and `double
-local function conf_if(cond: number, v1: number, v2: number): boolean
+local function cmp(cond: number, v1: number, v2: number): boolean
     if cond == 0 then
         return v1 == v2
     elseif cond == 1 then
@@ -205,6 +97,12 @@ local function wrap_int(n: number)
     end
     return u32
 end
+
+local DISPATCH_TYPES: { [number]: dispatcher.DispatchType } = {
+    [0] = "virtual",
+    [1] = "special",
+    [2] = "static",
+}
 
 --[=[ 
     Execute a single VM step (a native call, or a burst of bytecode 
@@ -261,17 +159,24 @@ local function step(jvm: t.Jvm)
     assert(ir, "transpile didn't work! bad!")
 
     local pc = f.pc -- only needs to be cached at the end, doesnt matter for exceptions, as that uses start_pc and sets pc, never reads it!
-    local code = f.code.code -- replace with IR
+    local b = ir.code -- replace with IR
+    local registers = f.registers
 
     local function fetch_u8(): number
-        local value = buffer.readu8(code, pc)
+        local value = buffer.readu8(b, pc)
         pc += 1
         return value
     end
 
     local function fetch_u16(): number
-        local value = read_u16be(code, pc)
+        local value = buffer.readu16(b, pc)
         pc += 2
+        return value
+    end
+
+    local function fetch_u32(): number
+        local value = buffer.readu32(b, pc)
+        pc += 4
         return value
     end
 
@@ -281,8 +186,143 @@ local function step(jvm: t.Jvm)
         f.start_pc = start_pc -- cache now because its used for debugging
 
         local op = fetch_u8()
+        if op == 0x00 then -- `nop`
+        elseif op == 0x01 then -- `move`
+            local dst = fetch_u16()
+            local src = fetch_u16()
+            registers[dst] = registers[src]
+        elseif op == 0x10 then -- `load_literal/null`
+            local dst = fetch_u16()
+            registers[dst] = nil
+        elseif op == 0x11 then -- `load_literal/int`
+            local dst = fetch_u16()
+            local value = buffer.readi32(b, pc)
+            pc += 4
+            registers[dst] = value
+        elseif op == 0x12 then -- `load_literal/float`
+            local dst = fetch_u16()
+            local value = buffer.readf32(b, pc)
+            pc += 4
+            registers[dst] = value
+        elseif op == 0x13 then -- `load_literal/long`
+            local dst = fetch_u16()
+            local value = buffer.readinteger(b, pc)
+            pc += 8
+            registers[dst] = value
+        elseif op == 0x14 then -- `load_literal/double`
+            local dst = fetch_u16()
+            local value = buffer.readf64(b, pc)
+            pc += 8
+            registers[dst] = value
+        elseif op == 0x15 then -- `load_const`
+            local dst = fetch_u16()
+            local idx = fetch_u16()
 
-        local wide = false
+            local value
+            if k:is(idx, "string") then
+                value = k:get(idx, "string")
+            elseif k:is(idx, "class") then
+                value = k:get(idx, "class")
+            else -- todo(dynamic): MethodType and MethodHandle
+                error("unsupported const type")
+            end
+
+            registers[dst] = value
+        elseif op == 0x20 then -- `add/int`
+            local dst = fetch_u16()
+            local lhs = registers[fetch_u16()] :: number
+            local rhs = registers[fetch_u16()] :: number
+            registers[dst] = wrap_int(lhs + rhs)
+        elseif op == 0x21 then -- `sub/int`
+            local dst = fetch_u16()
+            local lhs = registers[fetch_u16()] :: number
+            local rhs = registers[fetch_u16()] :: number
+            registers[dst] = wrap_int(lhs - rhs)
+        elseif op == 0x22 then -- `add_literal/int`
+            local dst = fetch_u16()
+            local lhs = registers[fetch_u16()] :: number
+            local rhs = buffer.readi32(b, pc)
+            pc += 4
+            registers[dst] = wrap_int(lhs + rhs)
+        elseif op >= 0x40 and op <= 0x45 then
+            local cond = op - 0x40
+            local dst = fetch_u16()
+            local lhs = registers[fetch_u16()] :: number
+            local rhs = registers[fetch_u16()] :: number
+            local value = if cmp(cond, lhs, rhs) then 1 else 0
+            registers[dst] = value
+        --elseif op == 0x46 then
+        elseif op == 0x50 then
+            pc = fetch_u32()
+        elseif op == 0x51 then
+            local src = fetch_u16()
+            local target = fetch_u32()
+
+            if registers[src] ~= 0 then
+                pc = target
+            end
+        elseif op == 0x60 then
+            local dst = fetch_u16()
+            local src = fetch_u16()
+            local field = k:get(fetch_u16(), "field")
+
+            local object = not_null(jvm, registers[src] :: t.JvmObjectRef)
+            local value = object:get_field(field)
+            registers[dst] = value
+        elseif op == 0x61 then
+            local dst = fetch_u16()
+            local src = fetch_u16()
+            local field = k:get(fetch_u16(), "field")
+
+            local value = registers[src]
+            local object = not_null(jvm, registers[dst] :: t.JvmObjectRef)
+            object:set_field(field, value)
+        elseif op == 0x62 then
+            local dst = fetch_u16()
+            local field = k:get(fetch_u16(), "field")
+            local value = field.class:get_static_field(field)
+            registers[dst] = value
+        elseif op == 0x63 then
+            local src = fetch_u16()
+            local field = k:get(fetch_u16(), "field")
+            local value = registers[src]
+            field.class:set_static_field(field, value)
+        elseif op == 0x70 then
+            local dst = fetch_u16()
+            local class = k:get(fetch_u16(), "class")
+            registers[dst] = class:_new_uninitialised()
+        elseif op == 0x71 then
+            local obj = not_null(jvm, registers[fetch_u16()] :: t.JvmObjectRef)
+            error(obj, 0)
+        elseif op == 0x80 or op == 0x81 then
+            local dst
+            if op == 0x80 then
+                dst = fetch_u16()
+            end
+
+            local method = k:get(fetch_u16(), "method")
+            local arg_start = fetch_u16()
+            local arg_count = fetch_u8()
+            local dispatch_type = DISPATCH_TYPES[fetch_u8()]
+            local args = table.create(arg_count) :: { t.JvmValue }
+            table.move(registers, arg_start, arg_start + arg_count, 1, args)
+            local dispatched = dispatcher.dispatch(jvm, method, dispatch_type, f.class)
+            invoke_inline(jvm, dispatched, t.Arguments.from_array(args, arg_count), dst)
+            break
+        elseif op == 0x82 or op == 0x83 then
+            local value, value_count = nil, 0
+            if op == 0x82 then
+                value = registers[fetch_u16()]
+                value_count = 1
+            end
+
+            frame.return_from_current_frame(jvm, thread, value_count, value)
+            break
+        else
+            jvm:_internal_error(string.format("unimplemented opcode 0x%02X", op))
+        end
+
+        --[[local wide = false
         if op == 0xC4 then -- wide
             wide = true
             op = fetch_u8()
@@ -434,7 +474,7 @@ local function step(jvm: t.Jvm)
             -- will break by nature of error
         else
             jvm:_internal_error(string.format("unimplemented opcode 0x%02X", op))
-        end
+        end]]
     end
 
     f.pc = pc

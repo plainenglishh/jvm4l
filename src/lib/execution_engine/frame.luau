@@ -10,7 +10,8 @@ function frame.push_on(
     thread: t.Thread,
     method: t.MethodHandle,
     invocation: t.Invocation?,
-    args: t.Arguments
+    args: t.Arguments,
+    return_to: number?
 )
     local frame: t.StackFrame
     local method_info = method.info
@@ -21,26 +22,21 @@ function frame.push_on(
     end
 
     if method_info.code.kind == "java" then
-        local locals: { any } = table.create(method_info.code.max_locals)
+        local registers: { any } = table.create(255)
 
         local current_arg = 1
         local current_local = 1
 
         if not method_info.static then
             local this = args[current_arg]
-            locals[current_local] = this
+            registers[current_local] = this
             current_arg += 1
             current_local += 1
         end
 
         for i, arg in method_info.type:get().arguments do
             local val = args[current_arg]
-            locals[current_local] = val
-
-            local words = jvm_type.words(arg)
-            if words == 2 then
-                locals[current_local] = nil -- holes are fine here
-            end
+            registers[current_local] = val
 
             current_arg += 1
             current_local += 1
@@ -52,11 +48,10 @@ function frame.push_on(
             class = class,
             constants = class._constant_pool or error("class has no constant pool"),
             code = method_info.code,
-            stack = table.create(method_info.code.max_stack, nil) :: { t.JvmValue },
-            locals = locals,
-            sp = 0,
-            pc = 0,
+            registers = registers,
+            return_to = return_to,
             start_pc = 0,
+            pc = 0,
             invocation = invocation,
         }
     elseif method_info.code.kind == "luau" then
@@ -129,8 +124,8 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
     stack[#stack] = nil
 
     if parent_frame and parent_frame.code.kind == "java" and count == 1 then
-        parent_frame.sp += 1
-        parent_frame.stack[parent_frame.sp] = value
+        assert(frame.return_to, "expected return_to for host invoke")
+        parent_frame.registers[frame.return_to] = value
     end
 end
 
