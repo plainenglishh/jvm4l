@@ -1,5 +1,6 @@
 --!native
 local dbg = require("../dbg")
+local ir = require("../ir")
 local jvm_type = require("../jvm_type")
 local t = require("../t")
 local util = require("../util")
@@ -253,8 +254,14 @@ local function step(jvm: t.Jvm)
 
     local class = f.class
     local k = f.constants
-    local code = f.code.code
+    if not f.code.ir then
+        ir.transpile(jvm, jvm:_create_interned_method(class, method), k)
+    end
+    local ir = f.code.ir
+    assert(ir, "transpile didn't work! bad!")
+
     local pc = f.pc -- only needs to be cached at the end, doesnt matter for exceptions, as that uses start_pc and sets pc, never reads it!
+    local code = f.code.code -- replace with IR
 
     local function fetch_u8(): number
         local value = buffer.readu8(code, pc)
@@ -289,7 +296,7 @@ local function step(jvm: t.Jvm)
             -- do nothing
         elseif op == 0x01 then -- `aconst_null`
             push(f, nil, 1)
-        elseif op >= 0x02 and op <= 0x08 then -- `aconst_<n>`
+        elseif op >= 0x02 and op <= 0x08 then -- `iconst_<n>`
             push(f, op - 0x03, 1)
         elseif op >= 0x09 and op <= 0x0A then -- `lconst_<n>`
             push(f, integer.create(op - 0x09), 2)

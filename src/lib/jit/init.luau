@@ -23,7 +23,7 @@ function jit.try_compile(jvm: t.Jvm, method: t.MethodHandle)
         return
     end
 
-    require("@std/fs").writeStringToFile("jitout.luau", src_or_reason)
+    dbg.dump_artifact(jvm, `jit/{method.class.name}_{method.info.name:gsub("[<>]", "__")}.luau`, src_or_reason)
 
     local jit_load = assert(jvm._settings.jit_load)
     local load_ok, loaded = pcall(jit_load, src_or_reason, "=jvm4l_jit")

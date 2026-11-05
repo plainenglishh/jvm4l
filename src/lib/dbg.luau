@@ -52,6 +52,16 @@ function dbg.trace(jvm: t.Jvm, format: string, ...: any)
     trace(message)
 end
 
+function dbg.dump_artifact(jvm: t.Jvm, path: string, bytes: string | buffer)
+    local dump = jvm._settings.dump
+    if not dump then
+        return
+    end
+
+    local bytes = if type(bytes) == "buffer" then bytes else buffer.fromstring(bytes)
+    dump(path, bytes)
+end
+
 function dbg.luau_stack_depth(start_level: number?): number
     local i = start_level or 1
     while debug.info(i, "f") do

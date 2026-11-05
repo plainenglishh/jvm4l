@@ -1,3 +1,4 @@
+local ir = require("../ir")
 local t = require("../t")
 local StringBuilder = require("../utilities/StringBuilder")
 local scanner = require("./scanner")
@@ -43,17 +44,23 @@ local function write_pop(writer: StringBuilder.StringBuilder, output_var: string
     end
 end
 
+local function write_commit(writer: StringBuilder.StringBuilder)
+    writer:writeln("f.pc, f.sp = pc, sp")
+end
+
 local function write_break(writer: StringBuilder.StringBuilder)
-    writer:writeln("f.pc, f.sp = pc, sp; return 'break'")
+    write_commit(writer)
+    writer:writeln("do return 'break' end")
 end
 
 local function write_return(writer: StringBuilder.StringBuilder, slots: number)
+    -- no need to commit
     write_pop(writer, "value", slots)
-    writer:writeln("return 'return', value")
+    writer:writeln("do return 'return', value end")
 end
 
 local function write_jump(writer: StringBuilder.StringBuilder, target: number)
-    writer:writeln("pc = %*; continue", target)
+    writer:writeln("do pc = %*; continue end", target)
 end
 
 local function write_int_wrap(writer: StringBuilder.StringBuilder, var_name: string)
@@ -237,6 +244,9 @@ end
 
 local function compile(method: t.MethodHandle): (boolean, string)
     assert(method.info.code.kind == "java")
+    if not method.info.code.ir then
+        ir.transpile(method.class.jvm, method, method.class._constant_pool or error(""))
+    end
     local blocks = scanner.scan(method.info.code)
     if type(blocks) == "string" then
         return false, blocks
@@ -277,7 +287,7 @@ while true do
                 pc += 1
             end
 
-            writer:writeln(`--// pc: %i, op: 0x%02X\ndo`, start_pc, op)
+            writer:writeln(`--// pc: %i, op: 0x%02X`, start_pc, op)
             writer:writeln(`f.start_pc = %i`, start_pc)
             local op_builder = OPS[op]
             if op_builder then
@@ -286,8 +296,6 @@ while true do
                 print(writer:build())
                 return false, string.format("no builder for opcode 0x%02X @ pc %i", op, pc - 1)
             end
-
-            writer:writeln("end")
         end
 
         if block.fallthrough then

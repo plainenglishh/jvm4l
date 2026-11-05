@@ -169,7 +169,8 @@ export type IntoJvmSettings = {
     quantum: number?,
     interrupt: InterruptCallback?,
     link_native: LinkNativeCallback,
-    trace: TraceCallback?,
+    trace: DebugTraceCallback?,
+    dump: DebugDumpCallback?,
     jit_load: JitLoadCallback?,
 }
 
@@ -178,7 +179,8 @@ export type _JvmSettings = {
     quantum: number,
     interrupt: InterruptCallback?,
     link_native: LinkNativeCallback,
-    trace: TraceCallback?,
+    trace: DebugTraceCallback?,
+    dump: DebugDumpCallback?,
     jit_load: JitLoadCallback?,
 }
 
@@ -187,7 +189,9 @@ export type LinkNativeCallback = (class_name: string, signature: string) -> Nati
 --- Callback called at VM safepoints.
 export type InterruptCallback = (jvm: Jvm) -> ()
 --- Callback used to emit internal debug traces.
-export type TraceCallback = (message: string) -> ()
+export type DebugTraceCallback = (message: string) -> ()
+--- Callback used to emit debug artifacts (e.g, generated IR/JIT artifacts).
+export type DebugDumpCallback = (path: string, bytes: buffer) -> ()
 --- Callback used to load generated JIT chunks.
 export type JitLoadCallback = (src: string, chunk_name: string) -> anyfunction
 
@@ -329,12 +333,13 @@ export type JvmClass = setmetatable<
             name: string,
             super: JvmClass?,
             interfaces: { JvmClass },
-            methods: { MethodInfo },
-            fields: { FieldInfo },
             access_flags: number,
             classfile: Classfile?,
             source_file: string?
         ) -> JvmClass,
+
+        _add_method: (self: JvmClass, method: MethodInfo) -> (),
+        _add_field: (self: JvmClass, field: FieldInfo) -> (),
 
         --[=[
 			Calls the class initialiser on this class if it hasn't been called
@@ -598,7 +603,15 @@ export type MethodCodeJava = {
     read code: buffer,
     read exceptions: ExceptionTable,
     read line_numbers: LineNumberTable?,
+    ir: MethodCodeJavaIr?,
     jit: JitStep?,
+}
+
+export type MethodCodeJavaIr = {
+    read total_registers: number,
+    read code: buffer,
+    read exceptions: ExceptionTable,
+    read line_numbers: LineNumberTable?,
 }
 
 export type LineNumberTable = { LineNumberTableEntry }

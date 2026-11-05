@@ -1,5 +1,5 @@
 jcl/bin/
 jcl/docs/
 *.javap
-jitout.luau
 *.out
+dbgout/

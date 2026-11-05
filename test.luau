@@ -1,6 +1,7 @@
 print("-----")
 
 local jvm4l = require("./src/lib")
+local transpiler = require("./src/lib/ir/transpiler")
 local jit = require("./src/lib/jit")
 
 local function link_native(class_name: string, signature: string): jvm4l.NativeMethod?
@@ -28,20 +29,32 @@ local function link_native(class_name: string, signature: string): jvm4l.NativeM
 
     return nil
 end
-
+require("@std/fs").removeDirectory("dbgout", { recursive = true })
 local epoch = os.clock()
 local vm = jvm4l.Jvm.new({
     link_native = link_native,
-    trace = function(message: string)
+
+    trace = function(message)
         local time_ms = (os.clock() - epoch) * 1000
         print(string.format("\x1b[2m[jvm4l @ %.3fms] %s\x1b[0m", time_ms, message))
     end,
 
-    --jit_load = function(src: string, chunk_name: string): (...any) -> ...any
-    --    local luau = require("@std/luau")
-    --    local bc = luau.compile(src)
-    --    return luau.load(bc, chunk_name)
-    --end,
+    dump = function(path: string, bytes: buffer)
+        local fs = require("@std/fs")
+        local fullpath = `dbgout/{path}`
+        local path = require("@std/path")
+        local dirname = path.dirname(fullpath)
+        if not fs.exists(dirname) then
+            fs.createDirectory(path.dirname(fullpath), { makeParents = true })
+        end
+        fs.writeStringToFile(fullpath, buffer.tostring(bytes))
+    end,
+
+    jit_load = function(src: string, chunk_name: string): (...any) -> ...any
+        local luau = require("@std/luau")
+        local bc = luau.compile(src)
+        return luau.load(bc, chunk_name)
+    end,
 
     --jit_load = function(src: string, chunk_name: string): (...any) -> ...any
     --    local luau = require("@std/luau")
@@ -68,7 +81,9 @@ local vm = jvm4l.Jvm.new({
 local ok, err = pcall(function(...)
     local Test = vm:load_class("jvm4l/test/Test")
     local test_ref = Test:resolve_method("main", "()V")
-    --jit.try_compile(vm, Test:resolve_method("loop", "()I"))
+    local loop_ref = Test:resolve_method("loop", "()I")
+    assert(loop_ref.info.code.kind == "java")
+    --jit.try_compile(vm, loop_ref)
     Test:invoke_static(test_ref)
 end)
 

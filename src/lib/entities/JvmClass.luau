@@ -22,8 +22,6 @@ function JvmClass._prepare(
     name: string,
     super: t.JvmClass?,
     interfaces: { t.JvmClass },
-    methods: { t.MethodInfo },
-    fields: { t.FieldInfo },
     access_flags: number,
     classfile: t.Classfile?,
     source_file: string?
@@ -48,8 +46,8 @@ function JvmClass._prepare(
 
         source_file = source_file,
 
-        _methods = methods,
-        _fields = fields,
+        _methods = {},
+        _fields = {},
         _classfile = classfile,
         _constant_pool = nil,
         _monitor = { held_by = nil, waiting = {} } :: t.Monitor,
@@ -72,6 +70,14 @@ function JvmClass._prepare(
     end
 
     return self
+end
+
+function JvmClass._add_method(self: t.JvmClass, method: t.MethodInfo)
+    table.insert(self._methods, method)
+end
+
+function JvmClass._add_field(self: t.JvmClass, field: t.FieldInfo)
+    table.insert(self._fields, field)
 end
 
 function JvmClass._ensure_initialised(self: t.JvmClass)

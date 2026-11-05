@@ -28,6 +28,7 @@
 - [X] Method calling & execution engine
 - [X] Strings
 - [X] Arrays
+- [ ] intermediate representation
 - [ ] Complete minimal opcode set:
     - [X] `nop`
     - [X] `aconst_null`, `aconst_<n>`, `lconst_<n>`, `fconst_<n>`, `dconst_<n>`, `bipush`, `sipush`, `ldc`
@@ -40,16 +41,21 @@
     - [X] `if_icmp<cond>`, `ifeq`
     - [X] `new`
     - [X] `dup`
-- [ ] proof of concept JIT
+- [X] proof of concept JIT
     - transpile java bytecode into luau source code to be loaded by a host provided 'load' function.
     - split into basic blocks, use trampoline for gotos
     - tailor output for native codegen, and return 'status' tokens for stuff like budget exhaustion, monitor waits, etc
-    - treeshake top level functions (e.g. `pop`)
     - preserve line info by setting start_pc before fallible operations
+- [ ] nicer JIT
+    - [ ] proper CFG generation
+    - [ ] dedicated compiler class
+    - [ ] localise stack and locals into 'registers' (luau locals), using the normal stack/local table for overflow, prioritise stack
+    - [ ] aim to identify simple control flow, e.g. loops & if statements (require unbroken blocks for now)
 - [ ] GC
     - [X] track all JvmObjects
     - [ ] trace references (inc. weak references), and mark unreachable objects for deletion
     - [ ] delete objects by calling its finaliser (which can prevent deletion), and dropping the object from the GC tracking table to allow the Luau GC to properly deallocate it
+    - [ ] memory leak detection in debug mode (recursively search all fields/values from the root jvm object to find references of to be dropped objects)
 - [ ] skip constructor frames in throwable backtrace generation
 
 ## Long Term Goals
