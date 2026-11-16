@@ -1,4 +1,5 @@
 --!native
+
 local dbg = require("../dbg")
 local ir = require("../ir")
 local t = require("../t")
@@ -90,12 +91,8 @@ local function cmp(cond: number, v1: number, v2: number): boolean
     error("")
 end
 
-local function wrap_int(n: number)
-    local u32 = bit32.band(n, 0xFFFFFFFF)
-    if u32 >= 0x80000000 then
-        return u32 - 0x100000000
-    end
-    return u32
+local function wrap_int(n: number): number
+    return (n + 2147483648) % 4294967296 - 2147483648
 end
 
 local DISPATCH_TYPES: { [number]: dispatcher.DispatchType } = {
@@ -158,8 +155,8 @@ local function step(jvm: t.Jvm)
     local ir = f.code.ir
     assert(ir, "transpile didn't work! bad!")
 
-    local pc = f.pc -- only needs to be cached at the end, doesnt matter for exceptions, as that uses start_pc and sets pc, never reads it!
-    local b = ir.code -- replace with IR
+    local pc = f.pc
+    local b = ir.code
     local registers = f.registers
 
     local function fetch_u8(): number
@@ -245,12 +242,15 @@ local function step(jvm: t.Jvm)
             pc += 4
             registers[dst] = wrap_int(lhs + rhs)
         elseif op >= 0x40 and op <= 0x45 then
-            local cond = op - 0x40
-            local dst = fetch_u16()
+            local cond = op - 0x40 -- `jump_if_<cond>/int`
             local lhs = registers[fetch_u16()] :: number
-            local rhs = registers[fetch_u16()] :: number
-            local value = if cmp(cond, lhs, rhs) then 1 else 0
-            registers[dst] = value
+            local rhs = registers[fetch_u16()] :: number or 0
+
+            if cmp(cond, lhs, rhs) then
+                pc = fetch_u32()
+            else
+                pc += 4
+            end
         --elseif op == 0x46 then
         elseif op == 0x50 then
             pc = fetch_u32()
@@ -321,160 +321,6 @@ local function step(jvm: t.Jvm)
         else
             jvm:_internal_error(string.format("unimplemented opcode 0x%02X", op))
         end
-
-        --[[local wide = false
-        if op == 0xC4 then -- wide
-            wide = true
-            op = fetch_u8()
-        end
-
-        if wide and not supports_wide(op) then
-            jvm:_internal_error(string.format("opcode %02X does not support wide", op))
-        end
-
-        if op == 0x00 then -- `nop`
-            -- do nothing
-        elseif op == 0x01 then -- `aconst_null`
-            push(f, nil, 1)
-        elseif op >= 0x02 and op <= 0x08 then -- `iconst_<n>`
-            push(f, op - 0x03, 1)
-        elseif op >= 0x09 and op <= 0x0A then -- `lconst_<n>`
-            push(f, integer.create(op - 0x09), 2)
-        elseif op >= 0x0B and op <= 0x0D then -- `fconst_<n>`
-            push(f, op - 0x0B, 1)
-        elseif op >= 0x0E and op <= 0x0F then -- `dconst_<n>`
-            push(f, op - 0x0E, 2)
-        elseif op == 0x10 then -- `bipush`
-            push(f, sign_extend_byte(fetch_u8()), 1)
-        elseif op == 0x11 then -- `sipush`
-            push(f, sign_extend_short(fetch_u16()), 1)
-        elseif op == 0x12 then -- `ldc`
-            local idx = fetch_u8()
-            local value: t.JvmValue
-
-            if k:is(idx, "int") then
-                value = k:get(idx, "int")
-            elseif k:is(idx, "float") then
-                value = k:get(idx, "float")
-            elseif k:is(idx, "string") then
-                value = k:get(idx, "string")
-            elseif k:is(idx, "class") then
-                value = k:get(idx, "class")
-            else
-                error("")
-            end -- todo(dynamic): MethodType and MethodHandle
-
-            push(f, value, 1)
-        elseif op >= 0x1A and op <= 0x1D then -- `iload_<n>`
-            push(f, get_local(f, op - 0x1A), 1)
-        elseif op >= 0x2A and op <= 0x2D then -- `aload_<n>`
-            push(f, get_local(f, op - 0x2A), 1)
-        elseif op >= 0x3B and op <= 0x3E then -- `istore_<n>`
-            set_local(f, op - 0x3B, pop(f, 1))
-        elseif op >= 0x4B and op <= 0x4E then -- `astore_<n>`
-            set_local(f, op - 0x4B, pop(f, 1))
-        elseif op == 0x59 then -- `dup`
-            local value = pop(f, 1)
-            push(f, value, 1)
-            push(f, value, 1)
-        elseif op == 0x60 then -- `iadd`
-            local v2, v1 = pop(f, 1) :: number, pop(f, 1) :: number
-            push(f, wrap_int(v1 + v2), 1)
-        elseif op == 0x64 then -- `isub`
-            local v2, v1 = pop(f, 1) :: number, pop(f, 1) :: number
-            push(f, wrap_int(v1 - v2), 1)
-        elseif op == 0x84 then -- `iinc`
-            local idx = fetch_u8()
-            local by = sign_extend_byte(fetch_u8())
-            local value = get_local(f, idx) :: number
-            set_local(f, idx, wrap_int(value + by))
-        elseif op >= 0x99 and op <= 0x9E then -- `if<cond>`
-            local cond = op - 0x99
-            local offset = sign_extend_short(fetch_u16())
-            local value1 = pop(f, 1) :: number
-
-            local taken = conf_if(cond, value1, 0)
-            if taken then
-                pc = start_pc + offset
-            end
-        elseif op >= 0x9F and op <= 0xA4 then -- `if_icmp<cond>`
-            local cond = op - 0x9F
-            local offset = sign_extend_short(fetch_u16())
-            local value2, value1 = pop(f, 1) :: number, pop(f, 1) :: number
-
-            local taken = conf_if(cond, value1, value2)
-            if taken then
-                pc = start_pc + offset
-            end
-        elseif op == 0xA7 then -- `goto`
-            local offset = sign_extend_short(fetch_u16())
-            pc = start_pc + offset
-        elseif op == 0xB2 then -- `getstatic`
-            local idx = fetch_u16()
-            local field = k:get(idx, "field")
-            local slots = jvm_type.words(field.info.type:get())
-            local value = field.class:get_static_field(field)
-            push(f, value, slots)
-        elseif op == 0xB3 then -- `putstatic`
-            local idx = fetch_u16()
-            local field = k:get(idx, "field")
-            local value = pop(f)
-            field.class:set_static_field(field, value)
-        elseif op == 0xB4 then -- `getfield`
-            local idx = fetch_u16()
-            local field = k:get(idx, "field")
-            local slots = jvm_type.words(field.info.type:get())
-            local object = not_null(jvm, pop(f) :: t.JvmObjectRef)
-            local value = object:get_field(field)
-            push(f, value, slots)
-        elseif op == 0xB5 then -- `putfield`
-            local idx = fetch_u16()
-            local field = k:get(idx, "field")
-            local value = pop(f)
-            local object = not_null(jvm, pop(f) :: t.JvmObjectRef)
-            object:set_field(field, value)
-        elseif op >= 0xB6 and op <= 0xB8 then -- `invokevirtual`, `invokestatic`, `invokespecial`
-            local dispatch_type = OP_DISPATCH_MAP[op]
-
-            local idx = fetch_u16()
-            local method = k:get(idx, "method")
-            local arg_count = #method.info.type:get().arguments
-            if op ~= 0xB8 then
-                arg_count += 1
-            end
-            local args = pop_n(f, arg_count, true) :: t.Arguments
-            args.n = arg_count
-            local dispatched_method = dispatcher.dispatch(jvm, method, dispatch_type, class)
-            invoke_inline(jvm, dispatched_method, args)
-            break
-        elseif op == 0xB0 or op == 0xB1 or (op >= 0xAC and op <= 0xAF) then -- `areturn`, `return`, `ireturn` `freturn`, `lreturn`, `dreturn`
-            local value: t.JvmValue, count: number
-
-            if op == 0xAD or op == 0xAF then
-                value = pop(f, 2)
-                count = 1
-            elseif op == 0xB1 then
-                value = nil
-                count = 0
-            else
-                value = pop(f, 1)
-                count = 1
-            end
-
-            frame.return_from_current_frame(jvm, thread, count, value)
-            break
-        elseif op == 0xBB then -- `new`
-            local idx = fetch_u16()
-            local class = k:get(idx, "class")
-            push(f, class:_new_uninitialised(), 1)
-        elseif op == 0xBF then -- `athrow`
-            -- TODO: synchronisation
-            local obj = not_null(jvm, pop(f, 1) :: t.JvmObjectRef)
-            error(obj, 0)
-            -- will break by nature of error
-        else
-            jvm:_internal_error(string.format("unimplemented opcode 0x%02X", op))
-        end]]
     end
 
     f.pc = pc

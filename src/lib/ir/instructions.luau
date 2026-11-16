@@ -12,6 +12,7 @@ export type InstructionInfo = {
     --- Whether this instruction requires a step burst to break (e.g. on method invocation, scheduler boundary, method return, etc)
     read breaks: boolean,
     read size: number?,
+    read jumps: boolean,
 }
 
 type IntoInstructionInfo = {
@@ -25,17 +26,24 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstructionInfo?)
     local into: IntoInstructionInfo = into or {}
 
     local size: number? = nil
+    local jumps = false
     if into.operands ~= "variable" then
         local new_size = 1
-        for _, operand in into.operands or {} do
+        for _, operand in (into.operands or {}) :: { Operand } do
             if operand.type == "u8" or operand.type == "i8" then
                 new_size += 1
             elseif operand.type == "u16" or operand.type == "i16" then
                 new_size += 2
-            elseif operand.type == "i32" or operand.type == "f32" then
+            elseif operand.type == "u32" or operand.type == "i32" or operand.type == "f32" then
                 new_size += 4
             elseif operand.type == "i64" or operand.type == "f64" then
                 new_size += 8
+            else
+                error("bad")
+            end
+
+            if operand.usage == "jump_target" then
+                jumps = true
             end
         end
         size = new_size
@@ -46,6 +54,7 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstructionInfo?)
         name = name,
         operands = into.operands or {},
         breaks = into.breaks or false,
+        jumps = jumps,
         size = size,
     })
 end
@@ -131,75 +140,66 @@ DEFINE_OP(0x22, "add_literal/int", {
     },
 })
 
---------------------------------------------------------------------------------
+----------------------------------------------------------------------------
 
-DEFINE_OP(0x40, "compare_eq/int", {
+DEFINE_OP(0x40, "jump_if_eq/int", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
         { type = "u16", usage = "reg_src" }, --lhs
         { type = "u16", usage = "reg_src" }, --rhs
-    },
-})
-
-DEFINE_OP(0x41, "compare_ne/int", {
-    operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-    },
-})
-
-DEFINE_OP(0x42, "compare_lt/int", {
-    operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-    },
-})
-
-DEFINE_OP(0x43, "compare_ge/int", {
-    operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-    },
-})
-
-DEFINE_OP(0x44, "compare_gt/int", {
-    operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-    },
-})
-
-DEFINE_OP(0x45, "compare_le/int", {
-    operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-    },
-})
-
-DEFINE_OP(0x46, "compare_eq/ref", {
-    operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-    },
-})
-
---------------------------------------------------------------------------------
-
-DEFINE_OP(0x50, "jump", {
-    operands = {
         { type = "u32", usage = "jump_target" },
     },
 })
 
-DEFINE_OP(0x51, "jump_if", {
+DEFINE_OP(0x41, "jump_if_ne/int", {
     operands = {
-        { type = "u16", usage = "reg_src" },
+        { type = "u16", usage = "reg_src" }, --lhs
+        { type = "u16", usage = "reg_src" }, --rhs
+        { type = "u32", usage = "jump_target" },
+    },
+})
+
+DEFINE_OP(0x42, "jump_if_lt/int", {
+    operands = {
+        { type = "u16", usage = "reg_src" }, --lhs
+        { type = "u16", usage = "reg_src" }, --rhs
+        { type = "u32", usage = "jump_target" },
+    },
+})
+
+DEFINE_OP(0x43, "jump_if_ge/int", {
+    operands = {
+        { type = "u16", usage = "reg_src" }, --lhs
+        { type = "u16", usage = "reg_src" }, --rhs
+        { type = "u32", usage = "jump_target" },
+    },
+})
+
+DEFINE_OP(0x44, "jump_if_gt/int", {
+    operands = {
+        { type = "u16", usage = "reg_src" }, --lhs
+        { type = "u16", usage = "reg_src" }, --rhs
+        { type = "u32", usage = "jump_target" },
+    },
+})
+
+DEFINE_OP(0x45, "jump_if_le/int", {
+    operands = {
+        { type = "u16", usage = "reg_src" }, --lhs
+        { type = "u16", usage = "reg_src" }, --rhs
+        { type = "u32", usage = "jump_target" },
+    },
+})
+
+DEFINE_OP(0x46, "jump_if_eq/ref", {
+    operands = {
+        { type = "u16", usage = "reg_src" }, --lhs
+        { type = "u16", usage = "reg_src" }, --rhs
+        { type = "u32", usage = "jump_target" },
+    },
+})
+
+DEFINE_OP(0x50, "jump", {
+    operands = {
         { type = "u32", usage = "jump_target" },
     },
 })

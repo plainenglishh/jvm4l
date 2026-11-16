@@ -172,6 +172,7 @@ export type IntoJvmSettings = {
     trace: DebugTraceCallback?,
     dump: DebugDumpCallback?,
     jit_load: JitLoadCallback?,
+    optimisation: number?,
 }
 
 --- Resolved version of `IntoJvmSettings`.
@@ -182,6 +183,7 @@ export type _JvmSettings = {
     trace: DebugTraceCallback?,
     dump: DebugDumpCallback?,
     jit_load: JitLoadCallback?,
+    optimisation: number,
 }
 
 --- Callback used to link native methods.

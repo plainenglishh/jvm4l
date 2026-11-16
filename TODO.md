@@ -28,7 +28,10 @@
 - [X] Method calling & execution engine
 - [X] Strings
 - [X] Arrays
-- [ ] intermediate representation
+- [ ] better native module support
+    - [ ] have a global 'native symbol table', populated by multiple Jvm:load_library(library: { [string]: NativeMethod } ) calls
+- [ ] patchable JCL (for runtime specific functionality. runtime independent JCL core goes in here, but runtime specific JCL libraries are to be provided seperately), permit overwriting of preexisting core JCL for things like `System.loadLibrary` and `System.getenv`
+- [X] intermediate representation
 - [ ] Complete minimal opcode set:
     - [X] `nop`
     - [X] `aconst_null`, `aconst_<n>`, `lconst_<n>`, `fconst_<n>`, `dconst_<n>`, `bipush`, `sipush`, `ldc`

@@ -72,15 +72,11 @@ function emit.add_literal_int(ir: BufferWriter, rdst: number, rlhs: number, lrhs
     ir:write_i32(lrhs)
 end
 
-function emit.compare_x_int(ir: BufferWriter, cond: number, rdst: number, rlhs: number, rrhs: number)
+function emit.jump_if_cond_int(ir: BufferWriter, cond: number, rlhs: number, rrhs: number, jtarget: number): JumpTarget
+    assert(cond >= 0 and cond <= 5)
     ir:write_u8(0x40 + cond)
-    ir:write_u16(rdst)
     ir:write_u16(rlhs)
     ir:write_u16(rrhs)
-end
-
-function emit.jump(ir: BufferWriter, jtarget: number): JumpTarget
-    ir:write_u8(0x50)
     local operand_pc = ir:cursor()
     ir:write_u32(0)
     return {
@@ -89,9 +85,8 @@ function emit.jump(ir: BufferWriter, jtarget: number): JumpTarget
     }
 end
 
-function emit.jump_if(ir: BufferWriter, rsrc: number, jtarget: number): JumpTarget
-    ir:write_u8(0x51)
-    ir:write_u16(rsrc)
+function emit.jump(ir: BufferWriter, jtarget: number): JumpTarget
+    ir:write_u8(0x50)
     local operand_pc = ir:cursor()
     ir:write_u32(0)
     return {

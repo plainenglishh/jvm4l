@@ -27,6 +27,7 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
         trace = into_settings.trace,
         dump = into_settings.dump,
         jit_load = into_settings.jit_load,
+        optimisation = into_settings.optimisation or 0,
     }
 
     local self: t.Jvm = setmetatable({

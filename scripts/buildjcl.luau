@@ -124,7 +124,7 @@ for _, artifact_path in artifacts do
     )
 end
 
-table.insert(out, "\nreturn jcl")
+table.insert(out, "\nreturn jcl\n")
 
 fs.writeStringToFile("src/lib/jcl_classfiles.luau", table.concat(out))
 

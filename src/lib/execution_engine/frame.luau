@@ -1,5 +1,4 @@
 local dbg = require("../dbg")
-local jvm_type = require("../jvm_type")
 local t = require("../t")
 local typechecker = require("../typechecker")
 

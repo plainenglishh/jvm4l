@@ -1,7 +1,6 @@
 local dbg = require("../dbg")
 local descriptors = require("../descriptors")
 local t = require("../t")
-local util = require("../util")
 local BufferWriter = require("../utilities/BufferWriter")
 local dissasembler = require("./dissasembler")
 local emit = require("./emit")
@@ -47,11 +46,6 @@ type JumpTarget = {
 }
 
 type SlotSize = "1" | "2"
-
-local function condense_locals(code: t.MethodCodeJava): { [number]: number }
-    -- condense old local indexes to new local indexes (note, not register indexes)
-    return util.unimplemented()
-end
 
 function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle, k: t.ConstantPool)
     local code = method.info.code
@@ -113,7 +107,8 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle, k: t.ConstantP
 
     while pc < bc_len do
         local start_pc = pc
-        pc_map[start_pc] = ir:cursor()
+        local start_ir_pc = ir:cursor()
+        pc_map[start_pc] = start_ir_pc
         local op = fetch_u8()
 
         local wide = false
@@ -215,21 +210,17 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle, k: t.ConstantP
         elseif op >= 0x99 and op <= 0x9E then -- `if<cond>`
             local cond = op - 0x99
             local rlhs = pop_stack_register("1")
-            local rdst = push_stack_register("1")
-            local offset = fetch_i16()
-            emit.compare_x_int(ir, cond, rdst, rlhs, 0)
-            table.insert(jump_targets, emit.jump_if(ir, rdst, start_pc + offset))
+            local target = start_pc + fetch_i16()
+            table.insert(jump_targets, emit.jump_if_cond_int(ir, cond, rlhs, 0, target))
         elseif op >= 0x9F and op <= 0xA4 then -- `if_icmp<cond>`
             local cond = op - 0x9F
             local rrhs = pop_stack_register("1")
             local rlhs = pop_stack_register("1")
-            local rdst = push_stack_register("1")
-            local offset = fetch_i16()
-            emit.compare_x_int(ir, cond, rdst, rlhs, rrhs)
-            table.insert(jump_targets, emit.jump_if(ir, rdst, start_pc + offset))
+            local target = start_pc + fetch_i16()
+            table.insert(jump_targets, emit.jump_if_cond_int(ir, cond, rlhs, rrhs, target))
         elseif op == 0xA7 then
-            local offset = fetch_i16()
-            table.insert(jump_targets, emit.jump(ir, start_pc + offset))
+            local target = start_pc + fetch_i16()
+            table.insert(jump_targets, emit.jump(ir, target))
         elseif op == 0xB0 or op == 0xB1 or (op >= 0xAC and op <= 0xAF) then -- `areturn`, `return`, `ireturn` `freturn`, `lreturn`, `dreturn`
             local rsrc: number?
 

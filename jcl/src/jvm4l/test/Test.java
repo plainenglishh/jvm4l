@@ -15,7 +15,7 @@ public class Test {
 
     private static int loop() {
         int i = 0;
-        while (i < 1000000) {
+        while (i < 5000000) {
             i++;
         }
         return i;

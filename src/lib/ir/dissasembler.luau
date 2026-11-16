@@ -9,7 +9,7 @@ function dissasembler.disassemble(ir: buffer): string
     local size = buffer.len(ir)
 
     while pc < size do
-        writer:write(string.format("0x%04X: ", pc))
+        writer:write(string.format("0x%08X: ", pc))
 
         local op = buffer.readu8(ir, pc)
         pc += 1
@@ -55,7 +55,7 @@ function dissasembler.disassemble(ir: buffer): string
             elseif operand.usage == "constant" then
                 writer:write(`K{value}`)
             elseif operand.usage == "jump_target" then
-                writer:write(string.format("0x%04X", value))
+                writer:write(string.format("0x%08X", value))
             elseif operand.usage == "dispatch_type" then
                 local type: string
                 if value == 0 then
