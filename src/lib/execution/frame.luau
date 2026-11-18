@@ -1,4 +1,5 @@
 local dbg = require("../dbg")
+local ir = require("../ir")
 local t = require("../t")
 local typechecker = require("../typechecker")
 
@@ -21,6 +22,10 @@ function frame.push_on(
     end
 
     if method_info.code.kind == "java" then
+        ir.transpile(jvm, method)
+    end
+
+    if method_info.code.kind == "ir" then
         local registers: { any } = table.create(255)
 
         local current_arg = 1
@@ -122,7 +127,7 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
 
     stack[#stack] = nil
 
-    if parent_frame and parent_frame.code.kind == "java" and count == 1 then
+    if parent_frame and parent_frame.code.kind == "ir" and count == 1 then
         assert(frame.return_to, "expected return_to for host invoke")
         parent_frame.registers[frame.return_to] = value
     end

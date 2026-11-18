@@ -1,4 +1,5 @@
 local generate = require("@self/generate")
+local ir = require("./ir")
 local dbg = require("./dbg")
 local t = require("./t")
 
@@ -6,10 +7,12 @@ local jit = {}
 
 function jit.try_compile(jvm: t.Jvm, method: t.MethodHandle)
     local start_t = os.clock()
-    if method.info.code.kind ~= "java" then
+    if method.info.code.kind == "luau" or method.info.code.kind == "abstract" then
         dbg.trace(jvm, "unable to jit compile %s.%s: not a java method", method.class.fqcn, method.info.name)
         return
     end
+
+    local code = ir.ensure_transpiled(jvm, method, assert(method.class._constant_pool))
 
     local jit_load = jvm._settings.jit_load
     if not jit_load then
@@ -32,7 +35,7 @@ function jit.try_compile(jvm: t.Jvm, method: t.MethodHandle)
         return
     end
 
-    method.info.code.jit = loaded() :: t.JitStep
+    code.jit = loaded() :: t.JitStep
     local time_ms = (os.clock() - start_t) * 1000
     dbg.trace(jvm, "jit compiled %s.%s in %.3fms", method.class.fqcn, method.info.name, time_ms)
 end

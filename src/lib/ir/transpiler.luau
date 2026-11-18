@@ -47,12 +47,12 @@ type JumpTarget = {
 
 type SlotSize = "1" | "2"
 
-function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle, k: t.ConstantPool)
-    local code = method.info.code
-    assert(code.kind == "java")
+function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeIr
+    local java_code = method.info.code
+    assert(java_code.kind == "java")
 
     dbg.trace(jvm, `transpiling {method.class.fqcn}.{method.info.signature}`)
-    local bc = code.code
+    local bc = java_code.code
     local bc_len = buffer.len(bc)
     local ir = BufferWriter.new(bc_len * 2)
 
@@ -60,6 +60,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle, k: t.ConstantP
     local jump_targets: { JumpTarget } = {}
     local stack: { SlotSize } = {}
     local stack_depth = 0
+    local k = method.class._constant_pool or error("bad constant pool")
     --local locals = condense_locals(code)
 
     local function get_pc(old_pc: number): number
@@ -102,7 +103,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle, k: t.ConstantP
     end
 
     local function get_local_register(index: number): number
-        return code.max_stack + index + 1 --locals[index]
+        return java_code.max_stack + index + 1 --locals[index]
     end
 
     while pc < bc_len do
@@ -298,7 +299,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle, k: t.ConstantP
     dbg.dump_artifact(jvm, `ir-{method.info.name}.asm`, dissasembler.disassemble(ir))
 
     local exceptions: { t.ExceptionHandler } = {}
-    for i, exception in code.exceptions do
+    for i, exception in java_code.exceptions do
         exceptions[i] = {
             start_pc = get_pc(exception.start_pc),
             end_pc = get_pc(exception.end_pc),
@@ -307,9 +308,9 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle, k: t.ConstantP
     end
 
     local line_numbers
-    if code.line_numbers then
+    if java_code.line_numbers then
         line_numbers = {}
-        for i, entry in code.line_numbers do
+        for i, entry in java_code.line_numbers do
             line_numbers[i] = {
                 line = entry.line,
                 start_pc = get_pc(entry.start_pc),
@@ -317,14 +318,19 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle, k: t.ConstantP
         end
     end
 
-    code.ir = {
-        total_registers = code.max_stack + code.max_locals + 1,
+    local ir_code: t.MethodCodeIr = {
+        kind = "ir",
+        from_java = java_code,
+        total_registers = java_code.max_stack + java_code.max_locals + 1,
         code = ir,
         exceptions = exceptions,
         line_numbers = line_numbers,
     }
 
+    method.info.code = ir_code
+
     dbg.trace(jvm, "end transpile")
+    return ir_code
 end
 
 return transpiler

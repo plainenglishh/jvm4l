@@ -149,10 +149,7 @@ local function step(jvm: t.Jvm)
 
     local class = f.class
     local k = f.constants
-    if not f.code.ir then
-        ir.transpile(jvm, jvm:_create_interned_method(class, method), k)
-    end
-    local ir = f.code.ir
+    local ir = f.code
     assert(ir, "transpile didn't work! bad!")
 
     local pc = f.pc

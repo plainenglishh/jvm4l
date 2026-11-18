@@ -32,8 +32,8 @@ function emit.wrap_int(writer: StringBuilder, tmp: string)
     writer:writeln("%s = (%s + 2147483648) %% 4294967296 - 2147483648", tmp, tmp)
 end
 
-function emit.return_value(writer: StringBuilder, tmp: string)
-    writer:writeln("do return 'return', %s end", tmp)
+function emit.return_register(writer: StringBuilder, reg: number)
+    writer:writeln("do return 'return', %s end", rexpr(reg))
 end
 
 function emit.return_void(writer: StringBuilder)
@@ -111,32 +111,27 @@ end
 
 OPS[0x82] = function(writer: StringBuilder, _, b: buffer, pc: number): number
     local rsrc = buffer.readu16(b, pc + 1)
-    writer:writeln("local _tmp")
-    emit.get_register(writer, "_tmp", rsrc)
-    emit.return_value(writer, "_tmp")
+    emit.return_register(writer, rsrc)
 
     return pc + 3
 end
 
 local function generate(method: t.MethodHandle): (boolean, string)
-    assert(method.info.code.kind == "java")
-    if not method.info.code.ir then
-        ir.transpile(method.class.jvm, method, method.class._constant_pool or error(""))
-    end
-    assert(method.info.code.ir)
-    local b = method.info.code.ir.code
-    local blocks = ir.analysis.basic_blocks(method.info.code.ir.code)
+    local code = ir.ensure_transpiled(method.class.jvm, method)
+    local b = code.code
+    local blocks = ir.analysis.basic_blocks(b)
 
     local writer = StringBuilder.new()
 
     writer:writeln([[
---!native
---!nolint
+--!nolint UnreachableCode
+--!nolint LocalUnused
+
+@native
 local function step(jvm: any, thread: any, f: any): ...any
 local pc: number = f.pc
 local k: any = f.constants
 local registers = f.registers
-local stack_depth = #thread.stack
 while true do
 ]])
 
@@ -155,7 +150,7 @@ while true do
                 return false, string.format("unknown opcode 0x%02X @ pc %i", op, start_pc - 1)
             end
 
-            writer:writeln(`--// pc: 0x%08X, op: %s (0x%02X), fallible: %*`, start_pc, info.name, op, info.fallible)
+            writer:writeln(`do --// pc: 0x%08X, op: %s (0x%02X), fallible: %*`, start_pc, info.name, op, info.fallible)
             if info.fallible then
                 emit.protect(writer, start_pc)
             end
@@ -167,16 +162,18 @@ while true do
                 print(writer:build())
                 return false, string.format("no builder for opcode 0x%02X @ pc %i", op, start_pc - 1)
             end
+            writer:writeln("end\n")
         end
 
+        writer:writeln("--// block end")
         if block.next then
-            writer:writeln("pc = %i -- next", block.next)
+            writer:writeln("pc = 0x%08X", block.next)
         else
-            writer:writeln('error("reached end without returning")')
+            writer:writeln('error("missing return")')
         end
     end
 
-    writer:writeln("else\nerror(`bad jump target {pc}`)\nend\nend\nend\nreturn step")
+    writer:writeln('else\nerror("bad jump target")\nend\nend\nend\n\nreturn step')
 
     return true, writer:build()
 end

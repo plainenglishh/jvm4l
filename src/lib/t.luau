@@ -243,10 +243,12 @@ export type StackFrameJava = {
     read method: MethodInfo,
     read class: JvmClass,
     read constants: ConstantPool,
-    read code: MethodCodeJava,
+    read code: MethodCodeIr,
+
     read registers: { JvmValue },
     start_pc: number,
     pc: number,
+
     read invocation: Invocation?,
     read return_to: number?,
     read jit: JitStep?,
@@ -551,7 +553,7 @@ export type MethodInfo = {
     read name: string,
     read descriptor: string,
     read signature: string,
-    read code: MethodCode,
+    code: MethodCode,
     read type: Lazy.Lazy<JvmMethodType>,
 
     read public: boolean,
@@ -585,7 +587,7 @@ export type NativeMethod = (jvm: Jvm, ...JvmValue) -> JvmValue
 	This is independent of the `native` and `abstract` flags, a non-native 
     synthetic method may be implemented with a luau closure, and vice versa.
 ]=]
-export type MethodCode = MethodCodeLuau | MethodCodeJava | MethodCodeAbstract
+export type MethodCode = MethodCodeJava | MethodCodeIr | MethodCodeLuau | MethodCodeAbstract
 
 --[=[
     A Luau (native) implementation of a method.
@@ -605,15 +607,16 @@ export type MethodCodeJava = {
     read code: buffer,
     read exceptions: ExceptionTable,
     read line_numbers: LineNumberTable?,
-    ir: MethodCodeJavaIr?,
-    jit: JitStep?,
 }
 
-export type MethodCodeJavaIr = {
+export type MethodCodeIr = {
+    read kind: "ir",
+    read from_java: MethodCodeJava,
     read total_registers: number,
     read code: buffer,
     read exceptions: ExceptionTable,
     read line_numbers: LineNumberTable?,
+    jit: JitStep?,
 }
 
 export type LineNumberTable = { LineNumberTableEntry }
