@@ -1,4 +1,4 @@
-local compile = require("@self/compiler")
+local generate = require("@self/generate")
 local dbg = require("./dbg")
 local t = require("./t")
 
@@ -17,7 +17,7 @@ function jit.try_compile(jvm: t.Jvm, method: t.MethodHandle)
         return
     end
 
-    local ok, src_or_reason = compile(method)
+    local ok, src_or_reason = generate(method)
     if not ok then
         dbg.trace(jvm, "unable to jit compile %s.%s: %s", method.class.fqcn, method.info.name, src_or_reason)
         return

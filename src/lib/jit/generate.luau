@@ -1,4 +1,5 @@
 local ir = require("../ir")
+local instructions = require("../ir/instructions")
 local t = require("../t")
 local StringBuilder = require("../utilities/StringBuilder")
 type StringBuilder = StringBuilder.StringBuilder
@@ -9,21 +10,26 @@ end
 
 local emit = {}
 
-function emit.commit(writer: StringBuilder)
-    writer:writeln("f.pc, f.sp = pc, sp")
+--- Commits any information required to recover from an exception.
+function emit.protect(writer: StringBuilder, start_pc: number)
+    writer:writeln("f.start_pc = 0x%08X", start_pc)
 end
 
-function emit.break_(writer: StringBuilder)
+function emit.commit(writer: StringBuilder)
+    writer:writeln("f.pc = pc")
+end
+
+function emit.break_always(writer: StringBuilder)
     emit.commit(writer)
     writer:writeln("do return 'break' end")
 end
 
 function emit.jump(writer: StringBuilder, target: number)
-    writer:writeln("do pc = %*; continue end", target)
+    writer:writeln("pc = %*; do continue end", target)
 end
 
-function emit.wrap_int(writer: StringBuilder, var_name: string)
-    writer:writeln("%s = (%s + 2147483648) %% 4294967296 - 2147483648", var_name, var_name)
+function emit.wrap_int(writer: StringBuilder, tmp: string)
+    writer:writeln("%s = (%s + 2147483648) %% 4294967296 - 2147483648", tmp, tmp)
 end
 
 function emit.return_value(writer: StringBuilder, tmp: string)
@@ -112,7 +118,7 @@ OPS[0x82] = function(writer: StringBuilder, _, b: buffer, pc: number): number
     return pc + 3
 end
 
-local function compile(method: t.MethodHandle): (boolean, string)
+local function generate(method: t.MethodHandle): (boolean, string)
     assert(method.info.code.kind == "java")
     if not method.info.code.ir then
         ir.transpile(method.class.jvm, method, method.class._constant_pool or error(""))
@@ -128,7 +134,6 @@ local function compile(method: t.MethodHandle): (boolean, string)
 --!nolint
 local function step(jvm: any, thread: any, f: any): ...any
 local pc: number = f.pc
-local sp: number = f.sp
 local k: any = f.constants
 local registers = f.registers
 local stack_depth = #thread.stack
@@ -142,18 +147,25 @@ while true do
 
         writer:writeln(`if pc == {block.start_pc} then`)
 
-        local pc = block.start_pc
-        while pc <= block.end_pc do
-            local op = buffer.readu8(b, pc)
+        local start_pc = block.start_pc
+        while start_pc <= block.end_pc do
+            local op = buffer.readu8(b, start_pc)
+            local info = instructions[op]
+            if not info then
+                return false, string.format("unknown opcode 0x%02X @ pc %i", op, start_pc - 1)
+            end
 
-            writer:writeln(`--// pc: 0x%08X, op: 0x%02X`, pc, op)
-            writer:writeln(`f.start_pc = 0x%02X`, pc)
+            writer:writeln(`--// pc: 0x%08X, op: %s (0x%02X), fallible: %*`, start_pc, info.name, op, info.fallible)
+            if info.fallible then
+                emit.protect(writer, start_pc)
+            end
+
             local op_builder = OPS[op]
             if op_builder then
-                pc = op_builder(writer, method, b, pc)
+                start_pc = op_builder(writer, method, b, start_pc)
             else
                 print(writer:build())
-                return false, string.format("no builder for opcode 0x%02X @ pc %i", op, pc - 1)
+                return false, string.format("no builder for opcode 0x%02X @ pc %i", op, start_pc - 1)
             end
         end
 
@@ -169,4 +181,4 @@ while true do
     return true, writer:build()
 end
 
-return compile
+return generate

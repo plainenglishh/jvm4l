@@ -1,7 +1,6 @@
 print("-----")
 
 local jvm4l = require("./src/lib")
-local transpiler = require("./src/lib/ir/transpiler")
 local jit = require("./src/lib/jit")
 
 local function link_native(class_name: string, signature: string): jvm4l.NativeMethod?
@@ -29,7 +28,7 @@ local function link_native(class_name: string, signature: string): jvm4l.NativeM
 
     return nil
 end
-require("@std/fs").removeDirectory("dbgout", { recursive = true })
+--require("@std/fs").removeDirectory("dbgout", { recursive = true })
 local epoch = os.clock()
 local vm = jvm4l.Jvm.new({
     link_native = link_native,
@@ -67,22 +66,20 @@ local vm = jvm4l.Jvm.new({
     --end,
 })
 
---local Object = vm:load_class("java/lang/Object")
---local array = vm:create_array(Object, {
---    Object:new_uninitialised(),
---    Object:new_uninitialised(),
---    Object:new_uninitialised(),
---    Object:new_uninitialised(),
---    Object:new_uninitialised(),
---})
---print(array:get_array_elements())
---print(vm:load_class("jvm4l/Luau"))
+local Object = vm:load_class("java/lang/Object")
+local array = vm:create_array(Object, {
+    Object:_new_uninitialised(),
+    Object:_new_uninitialised(),
+    Object:_new_uninitialised(),
+    Object:_new_uninitialised(),
+    Object:_new_uninitialised(),
+})
+print(array:get_array_elements())
 
 local ok, err = pcall(function(...)
     local Test = vm:load_class("jvm4l/test/Test")
     local test_ref = Test:resolve_method("main", "()V")
     local loop_ref = Test:resolve_method("loop", "()I")
-    assert(loop_ref.info.code.kind == "java")
     jit.try_compile(vm, loop_ref)
 
     local start = os.clock()

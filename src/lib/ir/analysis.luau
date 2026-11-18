@@ -34,7 +34,7 @@ function analysis.basic_blocks(b: buffer): { BasicBlock }
             end
         end
 
-        if insn.jumps then
+        if insn.can_jump then
             local target
             if op >= 0x40 and op <= 0x46 then
                 target = buffer.readu32(b, start_pc + 5)

@@ -1,23 +1,9 @@
-local execution_engine = require("../execution_engine")
-local t = require("../t") 
+local execution = require("../execution")
+local t = require("../t")
 local typechecker = require("../typechecker")
 
-local function hashcode_of(o: any): number
-    local ptr_str = string.match(tostring(o), "0x(%x+)") or error("unable to get hash code")
-    local ptr = integer.fromstring(ptr_str, 16)
-
-    local shifted_ptr = integer.idiv(ptr, 8i)
-    local scrambled = integer.mul(shifted_ptr, 0x9E3779B97F4A7C15i)
-    local upper = integer.idiv(scrambled, 0x100000000i)
-    local lower = integer.band(scrambled, 0xFFFFFFFFi)
-    local folded = integer.band(integer.bxor(upper, lower), 0xFFFFFFFFi)
-
-    if integer.ge(folded, 0x80000000i) then
-        return integer.tonumber(integer.sub(folded, 0x100000000i))
-    end
-
-    return integer.tonumber(folded)
-end
+local HASHCODE_MIN, HASHCODE_MAX = 0x00000000, 0xFFFFFFFF
+local next_hashcode = HASHCODE_MIN
 
 local JvmObject = {}
 JvmObject.__type = "JvmObject"
@@ -54,7 +40,11 @@ function JvmObject._new(jvm: t.Jvm, class: t.JvmClass, magic: t._MagicValue?): t
         _magic = magic,
         _field_values = {},
     }
-    inner.hash_code = hashcode_of(inner)
+    inner.hash_code = next_hashcode
+    next_hashcode += 1
+    if next_hashcode > HASHCODE_MAX then
+        next_hashcode = HASHCODE_MIN
+    end
     local self: t.JvmObject = setmetatable(inner, JvmObject)
     jvm._gc:_track(self)
     return self
@@ -65,8 +55,8 @@ function JvmObject._initialise(self: t.JvmObject, constructor: t.MethodHandle?, 
     table.insert(args, 1, self)
     args.n += 1
     local constructor = constructor or self.class:resolve_method("<init>", "()V")
-    local dispatched_constructor = execution_engine.dispatch(self.jvm, constructor, "special", self.class, self)
-    execution_engine.invoke_sync(self.jvm, dispatched_constructor, args)
+    local dispatched_constructor = execution.dispatch(self.jvm, constructor, "special", self.class, self)
+    execution.invoke_sync(self.jvm, dispatched_constructor, args)
 end
 
 function JvmObject.instance_of(self: t.JvmObject, class: t.JvmClass): boolean
@@ -93,15 +83,15 @@ end
 function JvmObject.invoke(self: t.JvmObject, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
     local args: t.Arguments = table.pack(...)
     table.insert(args, 1, self)
-    local dispatched_method = execution_engine.dispatch(self.jvm, method, "virtual", self.class, self)
-    return execution_engine.invoke_sync(self.jvm, dispatched_method, args)
+    local dispatched_method = execution.dispatch(self.jvm, method, "virtual", self.class, self)
+    return execution.invoke_sync(self.jvm, dispatched_method, args)
 end
 
 function JvmObject.invoke_exclusive(self: t.JvmObject, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
     local args: t.Arguments = table.pack(...)
     table.insert(args, 1, self)
-    local dispatched_method = execution_engine.dispatch(self.jvm, method, "virtual", self.class, self)
-    return execution_engine.invoke_sync(self.jvm, dispatched_method, args, true)
+    local dispatched_method = execution.dispatch(self.jvm, method, "virtual", self.class, self)
+    return execution.invoke_sync(self.jvm, dispatched_method, args, true)
 end
 
 function JvmObject.inner_string(self: t.JvmObject): string

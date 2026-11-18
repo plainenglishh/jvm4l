@@ -1,6 +1,6 @@
 local ConstantPool = require("../ConstantPool")
 local dbg = require("../dbg")
-local execution_engine = require("../execution_engine")
+local execution = require("../execution")
 local t = require("../t")
 local JvmObject = require("./JvmObject")
 
@@ -107,8 +107,8 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
 
     if self:get_method("<clinit>", "()V") then
         local clinit = self:resolve_method("<clinit>", "()V")
-        local dispatched_clinit = execution_engine.dispatch(self.jvm, clinit, "static", self)
-        execution_engine.invoke_sync(self.jvm, dispatched_clinit, { n = 0 }, true)
+        local dispatched_clinit = execution.dispatch(self.jvm, clinit, "static", self)
+        execution.invoke_sync(self.jvm, dispatched_clinit, { n = 0 }, true)
     end
 
     self._state = "initialised"
@@ -275,15 +275,15 @@ end
 function JvmClass.invoke_static(self: t.JvmClass, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
     self:_ensure_initialised()
     local args: t.Arguments = table.pack(...)
-    local dispatched_method = execution_engine.dispatch(self.jvm, method, "static", self)
-    return execution_engine.invoke_sync(self.jvm, dispatched_method, args)
+    local dispatched_method = execution.dispatch(self.jvm, method, "static", self)
+    return execution.invoke_sync(self.jvm, dispatched_method, args)
 end
 
 function JvmClass.invoke_static_exclusive(self: t.JvmClass, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
     self:_ensure_initialised()
     local args: t.Arguments = table.pack(...)
-    local dispatched_method = execution_engine.dispatch(self.jvm, method, "static", self)
-    return execution_engine.invoke_sync(self.jvm, dispatched_method, args, true)
+    local dispatched_method = execution.dispatch(self.jvm, method, "static", self)
+    return execution.invoke_sync(self.jvm, dispatched_method, args, true)
 end
 
 function JvmClass.get_method(self: t.JvmClass, name: string, descriptor: string): t.MethodInfo?

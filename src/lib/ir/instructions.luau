@@ -1,3 +1,19 @@
+--[[
+    This file serves as the authorative source on the Jvm4L IR.
+    Metadata fields can be used for debugging information, for codegen
+    decisions, or to help guide implementation involving the IR where
+    using this table in a hot loop is too slow.
+
+    The IR described herein is not stable.
+
+    When making an update to IR, the following places may need to be manually 
+    updated:
+    1. this file, obviously;
+    2. the interpreter loop (`src/lib/execution/step.luau`);
+    3. the jit code generator (`src/lib/jit/generate.luau`);
+    4. the ir transpiler (`src/lib/ir/*.luau`).
+]]
+
 export type Operand = {
     type: "u8" | "i8" | "u16" | "i16" | "u32" | "i32" | "f32" | "i64" | "f64",
     usage: "reg_dst" | "reg_src" | "constant" | "jump_target" | "literal" | "dispatch_type",
@@ -8,16 +24,21 @@ export type Operands = { Operand } | "variable"
 export type InstructionInfo = {
     read opcode: number,
     read name: string,
+    read size: number?,
     read operands: Operands,
+
     --- Whether this instruction requires a step burst to break (e.g. on method invocation, scheduler boundary, method return, etc)
     read breaks: boolean,
-    read size: number?,
-    read jumps: boolean,
+    --- Whether this instruction can jump.
+    read can_jump: boolean,
+    --- Whether this instruction can fail.
+    read fallible: boolean,
 }
 
 type IntoInstructionInfo = {
     operands: Operands?,
     breaks: boolean?,
+    fallible: boolean?,
 }
 
 local INSTRUCTIONS: { [number]: InstructionInfo } = {}
@@ -26,7 +47,7 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstructionInfo?)
     local into: IntoInstructionInfo = into or {}
 
     local size: number? = nil
-    local jumps = false
+    local can_jump = false
     if into.operands ~= "variable" then
         local new_size = 1
         for _, operand in (into.operands or {}) :: { Operand } do
@@ -43,7 +64,7 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstructionInfo?)
             end
 
             if operand.usage == "jump_target" then
-                jumps = true
+                can_jump = true
             end
         end
         size = new_size
@@ -52,10 +73,11 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstructionInfo?)
     INSTRUCTIONS[op] = table.freeze({
         opcode = op,
         name = name,
+        size = size,
         operands = into.operands or {},
         breaks = into.breaks or false,
-        jumps = jumps,
-        size = size,
+        can_jump = can_jump,
+        fallible = into.fallible or false,
     })
 end
 
@@ -111,6 +133,7 @@ DEFINE_OP(0x15, "load_const", {
         { type = "u16", usage = "reg_dst" },
         { type = "u16", usage = "constant" },
     },
+    fallible = true,
 })
 
 --------------------------------------------------------------------------------
@@ -212,6 +235,7 @@ DEFINE_OP(0x60, "get_field", {
         { type = "u16", usage = "reg_src" }, -- object
         { type = "u16", usage = "constant" }, -- field
     },
+    fallible = true,
 })
 
 DEFINE_OP(0x61, "set_field", {
@@ -220,6 +244,7 @@ DEFINE_OP(0x61, "set_field", {
         { type = "u16", usage = "reg_src" }, -- value
         { type = "u16", usage = "constant" }, -- field
     },
+    fallible = true,
 })
 
 DEFINE_OP(0x62, "get_static", {
@@ -227,6 +252,7 @@ DEFINE_OP(0x62, "get_static", {
         { type = "u16", usage = "reg_dst" },
         { type = "u16", usage = "constant" },
     },
+    fallible = true,
 })
 
 DEFINE_OP(0x63, "set_static", {
@@ -234,6 +260,7 @@ DEFINE_OP(0x63, "set_static", {
         { type = "u16", usage = "reg_src" },
         { type = "u16", usage = "constant" },
     },
+    fallible = true,
 })
 
 --------------------------------------------------------------------------------
@@ -243,12 +270,14 @@ DEFINE_OP(0x70, "new", {
         { type = "u16", usage = "reg_dst" },
         { type = "u16", usage = "constant" },
     },
+    fallible = true,
 })
 
 DEFINE_OP(0x71, "throw", {
     operands = {
         { type = "u16", usage = "reg_src" },
     },
+    fallible = true,
 })
 
 --------------------------------------------------------------------------------
@@ -262,6 +291,7 @@ DEFINE_OP(0x80, "invoke", {
         { type = "u8", usage = "dispatch_type" },
     },
     breaks = true,
+    fallible = true,
 })
 
 DEFINE_OP(0x81, "invoke/void", {
@@ -272,6 +302,7 @@ DEFINE_OP(0x81, "invoke/void", {
         { type = "u8", usage = "dispatch_type" },
     },
     breaks = true,
+    fallible = true,
 })
 
 DEFINE_OP(0x82, "return", {

@@ -8,9 +8,9 @@ local t = require("./t")
 export type DispatchType = dispatcher.DispatchType
 export type DispatchedMethodHandle = dispatcher.DispatchedMethodHandle
 
-local execution_engine = {}
+local execution = {}
 
-function execution_engine.dispatch(
+function execution.dispatch(
     jvm: t.Jvm,
     method: t.MethodHandle,
     type: DispatchType,
@@ -22,12 +22,12 @@ end
 
 --[=[
     Invokes `method` synchronously without performing dispatch logic.
-    You must call `execution_engine.dispatch` before this to get the correct method, regardless of dispatch type.
+    You must call `execution.dispatch` before this to get the correct method, regardless of dispatch type.
 
     **USE EXLCUSIVE MODE FOR ANY INVOCATIONS THAT CAN OCCUR UNDERNEATH A 
     BYTECODE INSTRUCTION, SUCH AS CLASS INITIALISATION AND BOOTSTRAP METHODS.**
 ]=]
-function execution_engine.invoke_sync(
+function execution.invoke_sync(
     jvm: t.Jvm,
     method: DispatchedMethodHandle,
     args: t.Arguments,
@@ -45,7 +45,7 @@ function execution_engine.invoke_sync(
     --local stack = thread.stack
     --local this_frame = stack[#stack]
     --if this_frame and this_frame.code.kind == "java" then
-    --    jvm:_internal_error("attempt to use `execution_engine.invoke_sync` in Java context, use invoke_inline")
+    --    jvm:_internal_error("attempt to use `execution.invoke_sync` in Java context, use invoke_inline")
     --    error("^")
     --end
 
@@ -66,4 +66,4 @@ function execution_engine.invoke_sync(
     return value_or_error
 end
 
-return execution_engine
+return execution
