@@ -255,7 +255,7 @@ export type StackFrameJava = {
 }
 
 export type StepExitReason = "break" | "return"
-export type Step = (jvm: Jvm, thread: Thread, frame: StackFrameJava) -> (StepExitReason, JvmValue)
+export type Step = (jvm: Jvm, frame: StackFrameJava) -> (StepExitReason, JvmValue)
 
 export type StackFrameLuau = {
     read kind: "luau",

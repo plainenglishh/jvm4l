@@ -130,7 +130,7 @@ local function generate(method: t.MethodHandle): (boolean, string)
 --!nolint LocalUnused
 
 @native
-local function step(jvm: any, thread: any, f: any): ...any
+local function step(jvm: any, f: any): ...any
 local pc: number = f.pc
 local k: any = f.constants
 local registers = f.registers

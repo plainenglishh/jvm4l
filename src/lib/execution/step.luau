@@ -112,7 +112,7 @@ local DISPATCH_TYPES: { [number]: dispatcher.DispatchType } = {
     2. anything that pushes or pops stack frames (no instruction can both push and pop a frame so that the depth remains the same)
     3. thread synchronisation (requires manual breaks in opcode impls)
 ]=]
-local function step_ir(jvm: t.Jvm, thread: t.Thread, f: t.StackFrameJava): (t.StepExitReason, t.JvmValue)
+local function step_ir(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitReason, t.JvmValue)
     local class = f.class
     local k = f.constants
     local ir = f.code
@@ -300,9 +300,9 @@ local function step(jvm: t.Jvm)
 
     local jit = f.code.jit
     if jit then
-        exit_reason, value = jit(jvm, thread, f)
+        exit_reason, value = jit(jvm, f)
     else
-        exit_reason, value = step_ir(jvm, thread, f)
+        exit_reason, value = step_ir(jvm, f)
     end
 
     if exit_reason == "break" then
