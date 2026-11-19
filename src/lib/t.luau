@@ -251,13 +251,11 @@ export type StackFrameJava = {
 
     read invocation: Invocation?,
     read return_to: number?,
-    read jit: JitStep?,
+    read jit: Step?,
 }
 
-export type JitExitReason = "break" | "return"
-
---- A JIT compiled method.
-export type JitStep = (jvm: Jvm, thread: Thread, frame: StackFrameJava) -> (JitExitReason, JvmValue)
+export type StepExitReason = "break" | "return"
+export type Step = (jvm: Jvm, thread: Thread, frame: StackFrameJava) -> (StepExitReason, JvmValue)
 
 export type StackFrameLuau = {
     read kind: "luau",
@@ -616,7 +614,7 @@ export type MethodCodeIr = {
     read code: buffer,
     read exceptions: ExceptionTable,
     read line_numbers: LineNumberTable?,
-    jit: JitStep?,
+    jit: Step?,
 }
 
 export type LineNumberTable = { LineNumberTableEntry }

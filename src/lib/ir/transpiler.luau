@@ -234,7 +234,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
             if rsrc then
                 emit.return_(ir, rsrc)
             else
-                emit.return_void(ir)
+                emit.return_(ir, 0)
             end
         elseif op == 0xB2 then -- `getstatic`
             local kfield = fetch_u16()
@@ -270,7 +270,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
             stack_depth -= arg_count
 
             if void then
-                emit.invoke_void(ir, kmethod, rsrc, arg_count, dispatch_type)
+                emit.invoke(ir, 0, kmethod, rsrc, arg_count, dispatch_type)
             else
                 local rdst = push_stack_register("1")
                 emit.invoke(ir, rdst, kmethod, rsrc, arg_count, dispatch_type)

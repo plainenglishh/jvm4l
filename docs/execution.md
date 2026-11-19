@@ -16,8 +16,8 @@ when the main method finishes, it completes only when all non-daemon threads
 have finished.
 
 Executors are used whenever the JVM requires a synchronous value from a method
-invocation. This includes host-side invocations—such as reentrant method
-calls within native methods and static initialisers—as well as the top-level 
+invocation. This includes host-side invocations-such as reentrant method
+calls within native methods and static initialisers-as well as the top-level 
 invocation. An arbitrary number of nested executors are allowed.
 
 Invocations that do not require synchronous returns are executed 'inline' by 

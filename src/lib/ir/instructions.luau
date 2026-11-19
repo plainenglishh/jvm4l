@@ -294,25 +294,10 @@ DEFINE_OP(0x80, "invoke", {
     fallible = true,
 })
 
-DEFINE_OP(0x81, "invoke/void", {
-    operands = {
-        { type = "u16", usage = "constant" }, -- method
-        { type = "u16", usage = "reg_src" }, -- arg_start
-        { type = "u8", usage = "literal" }, -- arg_count
-        { type = "u8", usage = "dispatch_type" },
-    },
-    breaks = true,
-    fallible = true,
-})
-
-DEFINE_OP(0x82, "return", {
+DEFINE_OP(0x81, "return", {
     operands = {
         { type = "u16", usage = "reg_src" },
     },
-    breaks = true,
-})
-
-DEFINE_OP(0x83, "return/void", {
     breaks = true,
 })
 

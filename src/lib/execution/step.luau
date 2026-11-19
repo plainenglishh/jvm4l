@@ -1,7 +1,6 @@
 --!native
 
 local dbg = require("../dbg")
-local ir = require("../ir")
 local t = require("../t")
 local util = require("../util")
 local dispatcher = require("./dispatcher")
@@ -113,40 +112,7 @@ local DISPATCH_TYPES: { [number]: dispatcher.DispatchType } = {
     2. anything that pushes or pops stack frames (no instruction can both push and pop a frame so that the depth remains the same)
     3. thread synchronisation (requires manual breaks in opcode impls)
 ]=]
-local function step(jvm: t.Jvm)
-    local thread, f = frame.current(jvm)
-    assert(thread and f)
-
-    local method = f.method
-
-    if f.code.kind == "luau" then
-        local depth = dbg.luau_stack_depth()
-        local ok, value = xpcall(f.code.closure, function(e: any)
-            return coerce_error(jvm, e, depth)
-        end, jvm, unpack(f.args))
-
-        if not ok then
-            error(value, 0)
-        end
-
-        return frame.return_from_current_frame(jvm, thread, if method.type:get().returns == "void" then 0 else 1, value)
-    end
-
-    local jit = f.code.jit
-    if jit then
-        local exit_reason, value = jit(jvm, thread, f)
-        if exit_reason == "break" then
-            return
-        elseif exit_reason == "return" then
-            return frame.return_from_current_frame(
-                jvm,
-                thread,
-                if method.type:get().returns == "void" then 0 else 1,
-                value
-            )
-        end
-    end
-
+local function step_ir(jvm: t.Jvm, thread: t.Thread, f: t.StackFrameJava): (t.StepExitReason, t.JvmValue)
     local class = f.class
     local k = f.constants
     local ir = f.code
@@ -238,8 +204,8 @@ local function step(jvm: t.Jvm)
             local rhs = buffer.readi32(b, pc)
             pc += 4
             registers[dst] = wrap_int(lhs + rhs)
-        elseif op >= 0x40 and op <= 0x45 then
-            local cond = op - 0x40 -- `jump_if_<cond>/int`
+        elseif op >= 0x40 and op <= 0x45 then -- `jump_if_<cond>/int`
+            local cond = op - 0x40
             local lhs = registers[fetch_u16()] :: number
             local rhs = registers[fetch_u16()] :: number or 0
 
@@ -248,17 +214,10 @@ local function step(jvm: t.Jvm)
             else
                 pc += 4
             end
-        --elseif op == 0x46 then
-        elseif op == 0x50 then
+        --elseif op == 0x46 then -- `jump_if_eq/ref`
+        elseif op == 0x50 then -- `jump`
             pc = fetch_u32()
-        elseif op == 0x51 then
-            local src = fetch_u16()
-            local target = fetch_u32()
-
-            if registers[src] ~= 0 then
-                pc = target
-            end
-        elseif op == 0x60 then
+        elseif op == 0x60 then -- `get_field`
             local dst = fetch_u16()
             local src = fetch_u16()
             local field = k:get(fetch_u16(), "field")
@@ -266,7 +225,7 @@ local function step(jvm: t.Jvm)
             local object = not_null(jvm, registers[src] :: t.JvmObjectRef)
             local value = object:get_field(field)
             registers[dst] = value
-        elseif op == 0x61 then
+        elseif op == 0x61 then -- `set_field`
             local dst = fetch_u16()
             local src = fetch_u16()
             local field = k:get(fetch_u16(), "field")
@@ -274,27 +233,27 @@ local function step(jvm: t.Jvm)
             local value = registers[src]
             local object = not_null(jvm, registers[dst] :: t.JvmObjectRef)
             object:set_field(field, value)
-        elseif op == 0x62 then
+        elseif op == 0x62 then -- `get_static`
             local dst = fetch_u16()
             local field = k:get(fetch_u16(), "field")
             local value = field.class:get_static_field(field)
             registers[dst] = value
-        elseif op == 0x63 then
+        elseif op == 0x63 then -- `set_static`
             local src = fetch_u16()
             local field = k:get(fetch_u16(), "field")
             local value = registers[src]
             field.class:set_static_field(field, value)
-        elseif op == 0x70 then
+        elseif op == 0x70 then -- `new`
             local dst = fetch_u16()
             local class = k:get(fetch_u16(), "class")
             registers[dst] = class:_new_uninitialised()
-        elseif op == 0x71 then
+        elseif op == 0x71 then -- `throw`
             local obj = not_null(jvm, registers[fetch_u16()] :: t.JvmObjectRef)
             error(obj, 0)
-        elseif op == 0x80 or op == 0x81 then
-            local dst
-            if op == 0x80 then
-                dst = fetch_u16()
+        elseif op == 0x80 then -- `invoke`
+            local dst: number? = fetch_u16()
+            if dst == 0 then
+                dst = nil
             end
 
             local method = k:get(fetch_u16(), "method")
@@ -306,21 +265,51 @@ local function step(jvm: t.Jvm)
             local dispatched = dispatcher.dispatch(jvm, method, dispatch_type, f.class)
             invoke_inline(jvm, dispatched, t.Arguments.from_array(args, arg_count), dst)
             break
-        elseif op == 0x82 or op == 0x83 then
-            local value, value_count = nil, 0
-            if op == 0x82 then
-                value = registers[fetch_u16()]
-                value_count = 1
-            end
-
-            frame.return_from_current_frame(jvm, thread, value_count, value)
-            break
+        elseif op == 0x81 then -- `return`
+            local value = registers[fetch_u16()]
+            return "return", value
         else
             jvm:_internal_error(string.format("unimplemented opcode 0x%02X", op))
         end
     end
 
     f.pc = pc
+    return "break", nil
+end
+
+local function step(jvm: t.Jvm)
+    local thread, f = frame.current(jvm)
+    assert(thread and f)
+
+    local method = f.method
+
+    if f.code.kind == "luau" then
+        local depth = dbg.luau_stack_depth()
+        local ok, value = xpcall(f.code.closure, function(e: any)
+            return coerce_error(jvm, e, depth)
+        end, jvm, unpack(f.args))
+
+        if not ok then
+            error(value, 0)
+        end
+
+        return frame.return_from_current_frame(jvm, thread, if method.type:get().returns == "void" then 0 else 1, value)
+    end
+
+    local exit_reason, value
+
+    local jit = f.code.jit
+    if jit then
+        exit_reason, value = jit(jvm, thread, f)
+    else
+        exit_reason, value = step_ir(jvm, thread, f)
+    end
+
+    if exit_reason == "break" then
+        return
+    elseif exit_reason == "return" then
+        return frame.return_from_current_frame(jvm, thread, if method.type:get().returns == "void" then 0 else 1, value)
+    end
 end
 
 return step

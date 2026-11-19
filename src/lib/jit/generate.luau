@@ -25,7 +25,7 @@ function emit.break_always(writer: StringBuilder)
 end
 
 function emit.jump(writer: StringBuilder, target: number)
-    writer:writeln("pc = %*; do continue end", target)
+    writer:writeln("pc = 0x%08X; do continue end", target)
 end
 
 function emit.wrap_int(writer: StringBuilder, tmp: string)
@@ -109,9 +109,11 @@ OPS[0x50] = function(writer: StringBuilder, _, b: buffer, pc: number): number
     return pc + 5
 end
 
-OPS[0x82] = function(writer: StringBuilder, _, b: buffer, pc: number): number
+OPS[0x81] = function(writer: StringBuilder, _, b: buffer, pc: number): number
     local rsrc = buffer.readu16(b, pc + 1)
-    emit.return_register(writer, rsrc)
+    if rsrc ~= 0 then
+        emit.return_register(writer, rsrc)
+    end
 
     return pc + 3
 end
@@ -150,7 +152,13 @@ while true do
                 return false, string.format("unknown opcode 0x%02X @ pc %i", op, start_pc - 1)
             end
 
-            writer:writeln(`do --// pc: 0x%08X, op: %s (0x%02X), fallible: %*`, start_pc, info.name, op, info.fallible)
+            writer:writeln(
+                `do --// pc: 0x%08X, op: \`%s\` (0x%02X), fallible: %*`,
+                start_pc,
+                info.name,
+                op,
+                info.fallible
+            )
             if info.fallible then
                 emit.protect(writer, start_pc)
             end

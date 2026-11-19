@@ -149,22 +149,9 @@ function emit.invoke(
     ir:write_u8(dispatch_type)
 end
 
-function emit.invoke_void(ir: BufferWriter, kmethod: number, rsrc: number, arg_count: number, dispatch_type: number)
-    ir:write_u8(0x81)
-    ir:write_u16(kmethod)
-    ir:write_u16(rsrc)
-    ir:write_u8(arg_count)
-    assert(dispatch_type >= 0 and dispatch_type <= 3)
-    ir:write_u8(dispatch_type)
-end
-
 function emit.return_(ir: BufferWriter, rsrc: number)
-    ir:write_u8(0x82)
+    ir:write_u8(0x81)
     ir:write_u16(rsrc)
-end
-
-function emit.return_void(ir: BufferWriter)
-    ir:write_u8(0x83)
 end
 
 return emit
