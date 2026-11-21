@@ -35,7 +35,7 @@ function jit.try_compile(jvm: t.Jvm, method: t.MethodHandle)
         return
     end
 
-    code.jit = loaded() :: t.Step
+    code.jit = loaded() :: t.MethodStepJava
     local time_ms = (os.clock() - start_t) * 1000
     dbg.trace(jvm, "jit compiled %s.%s in %.3fms", method.class.fqcn, method.info.name, time_ms)
 end

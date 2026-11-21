@@ -39,7 +39,7 @@ export type FieldInfo = t.FieldInfo
 export type FieldHandle = t.FieldHandle
 export type MethodInfo = t.MethodInfo
 export type MethodHandle = t.MethodHandle
-export type NativeMethod = t.NativeMethod
+export type NativeMethod = t.NativeMethodStep
 export type MethodCode = t.MethodCode
 export type MethodCodeLuau = t.MethodCodeLuau
 export type MethodCodeJava = t.MethodCodeJava
@@ -102,10 +102,10 @@ function jvm4l.display_exception(exception: t.JvmObject): string
 
         for _, frame in exception._magic.stack do
             local where: string
-            if frame.method.native then
+            if frame.method.info.native then
                 where = "Native Method"
-            elseif frame.class.source_file then
-                where = frame.class.source_file
+            elseif frame.method.class.source_file then
+                where = frame.method.class.source_file
 
                 if frame.code.kind == "java" and frame.code.line_numbers then
                     local line = -1
@@ -124,7 +124,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
                 where = "Unknown Source"
             end
 
-            table.insert(builder, 1, `    at {frame.class.fqcn}.{frame.method.name}({where})`)
+            table.insert(builder, 1, `    at {frame.method.class.fqcn}.{frame.method.info.name}({where})`)
         end
 
         stack_trace = "\n" .. table.concat(builder, "\n")

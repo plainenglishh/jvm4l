@@ -5,23 +5,23 @@ local jit = require("./src/lib/jit")
 
 local function link_native(class_name: string, signature: string): jvm4l.NativeMethod?
     if class_name == "jvm4l/test/Test" and signature == "print_int:(I)V" then
-        return function(jvm: jvm4l.Jvm, value)
+        return function(jvm, ctx, value)
             print(value)
-            return nil
+            return "return", nil
         end
     elseif class_name == "jvm4l/test/Test" and signature == "error:()V" then
-        return function(jvm: jvm4l.Jvm)
+        return function(jvm: jvm4l.Jvm, ctx)
             error("error was called!")
         end
     elseif class_name == "jvm4l/test/Test" and signature == "calls_error_wrapper:()V" then
-        return function(jvm: jvm4l.Jvm)
+        return function(jvm: jvm4l.Jvm, ctx)
             local Test = jvm:load_class("jvm4l//testTest")
             local error_wrapper = Test:resolve_method("error_wrapper", "()V")
             Test:invoke_static(error_wrapper)
-            return nil
+            return "return", nil
         end
     elseif class_name == "jvm4l/ApplicationClassLoader" and signature == "findClassBytes:(Ljava/lang/String;)[B" then
-        return function(jvm: jvm4l.Jvm, name: jvm4l.JvmValue): jvm4l.JvmValue
+        return function(jvm: jvm4l.Jvm, ctx, name: jvm4l.JvmValue)
             error("unimplemented")
         end
     end
@@ -65,16 +65,6 @@ local vm = jvm4l.Jvm.new({
     --    end
     --end,
 })
-
-local Object = vm:load_class("java/lang/Object")
-local array = vm:create_array(Object, {
-    Object:_new_uninitialised(),
-    Object:_new_uninitialised(),
-    Object:_new_uninitialised(),
-    Object:_new_uninitialised(),
-    Object:_new_uninitialised(),
-})
-print(array:get_array_elements())
 
 local ok, err = pcall(function(...)
     local Test = vm:load_class("jvm4l/test/Test")

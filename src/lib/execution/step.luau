@@ -112,15 +112,12 @@ local DISPATCH_TYPES: { [number]: dispatcher.DispatchType } = {
     2. anything that pushes or pops stack frames (no instruction can both push and pop a frame so that the depth remains the same)
     3. thread synchronisation (requires manual breaks in opcode impls)
 ]=]
-local function step_ir(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitReason, t.JvmValue)
-    local class = f.class
-    local k = f.constants
+local function interpret(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitReason, t.JvmValue)
+    local K = f.constants
     local ir = f.code
-    assert(ir, "transpile didn't work! bad!")
-
     local pc = f.pc
+    local r = f.registers
     local b = ir.code
-    local registers = f.registers
 
     local function fetch_u8(): number
         local value = buffer.readu8(b, pc)
@@ -150,64 +147,64 @@ local function step_ir(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitReason, t.Jv
         elseif op == 0x01 then -- `move`
             local dst = fetch_u16()
             local src = fetch_u16()
-            registers[dst] = registers[src]
+            r[dst] = r[src]
         elseif op == 0x10 then -- `load_literal/null`
             local dst = fetch_u16()
-            registers[dst] = nil
+            r[dst] = nil
         elseif op == 0x11 then -- `load_literal/int`
             local dst = fetch_u16()
             local value = buffer.readi32(b, pc)
             pc += 4
-            registers[dst] = value
+            r[dst] = value
         elseif op == 0x12 then -- `load_literal/float`
             local dst = fetch_u16()
             local value = buffer.readf32(b, pc)
             pc += 4
-            registers[dst] = value
+            r[dst] = value
         elseif op == 0x13 then -- `load_literal/long`
             local dst = fetch_u16()
             local value = buffer.readinteger(b, pc)
             pc += 8
-            registers[dst] = value
+            r[dst] = value
         elseif op == 0x14 then -- `load_literal/double`
             local dst = fetch_u16()
             local value = buffer.readf64(b, pc)
             pc += 8
-            registers[dst] = value
+            r[dst] = value
         elseif op == 0x15 then -- `load_const`
             local dst = fetch_u16()
             local idx = fetch_u16()
 
             local value
-            if k:is(idx, "string") then
-                value = k:get(idx, "string")
-            elseif k:is(idx, "class") then
-                value = k:get(idx, "class")
+            if K:is(idx, "string") then
+                value = K:get(idx, "string")
+            elseif K:is(idx, "class") then
+                value = K:get(idx, "class")
             else -- todo(dynamic): MethodType and MethodHandle
                 error("unsupported const type")
             end
 
-            registers[dst] = value
+            r[dst] = value
         elseif op == 0x20 then -- `add/int`
             local dst = fetch_u16()
-            local lhs = registers[fetch_u16()] :: number
-            local rhs = registers[fetch_u16()] :: number
-            registers[dst] = wrap_int(lhs + rhs)
+            local lhs = r[fetch_u16()] :: number
+            local rhs = r[fetch_u16()] :: number
+            r[dst] = wrap_int(lhs + rhs)
         elseif op == 0x21 then -- `sub/int`
             local dst = fetch_u16()
-            local lhs = registers[fetch_u16()] :: number
-            local rhs = registers[fetch_u16()] :: number
-            registers[dst] = wrap_int(lhs - rhs)
+            local lhs = r[fetch_u16()] :: number
+            local rhs = r[fetch_u16()] :: number
+            r[dst] = wrap_int(lhs - rhs)
         elseif op == 0x22 then -- `add_literal/int`
             local dst = fetch_u16()
-            local lhs = registers[fetch_u16()] :: number
+            local lhs = r[fetch_u16()] :: number
             local rhs = buffer.readi32(b, pc)
             pc += 4
-            registers[dst] = wrap_int(lhs + rhs)
+            r[dst] = wrap_int(lhs + rhs)
         elseif op >= 0x40 and op <= 0x45 then -- `jump_if_<cond>/int`
             local cond = op - 0x40
-            local lhs = registers[fetch_u16()] :: number
-            local rhs = registers[fetch_u16()] :: number or 0
+            local lhs = r[fetch_u16()] :: number
+            local rhs = r[fetch_u16()] :: number or 0
 
             if cmp(cond, lhs, rhs) then
                 pc = fetch_u32()
@@ -220,35 +217,35 @@ local function step_ir(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitReason, t.Jv
         elseif op == 0x60 then -- `get_field`
             local dst = fetch_u16()
             local src = fetch_u16()
-            local field = k:get(fetch_u16(), "field")
+            local field = K:get(fetch_u16(), "field")
 
-            local object = not_null(jvm, registers[src] :: t.JvmObjectRef)
+            local object = not_null(jvm, r[src] :: t.JvmObjectRef)
             local value = object:get_field(field)
-            registers[dst] = value
+            r[dst] = value
         elseif op == 0x61 then -- `set_field`
             local dst = fetch_u16()
             local src = fetch_u16()
-            local field = k:get(fetch_u16(), "field")
+            local field = K:get(fetch_u16(), "field")
 
-            local value = registers[src]
-            local object = not_null(jvm, registers[dst] :: t.JvmObjectRef)
+            local value = r[src]
+            local object = not_null(jvm, r[dst] :: t.JvmObjectRef)
             object:set_field(field, value)
         elseif op == 0x62 then -- `get_static`
             local dst = fetch_u16()
-            local field = k:get(fetch_u16(), "field")
+            local field = K:get(fetch_u16(), "field")
             local value = field.class:get_static_field(field)
-            registers[dst] = value
+            r[dst] = value
         elseif op == 0x63 then -- `set_static`
             local src = fetch_u16()
-            local field = k:get(fetch_u16(), "field")
-            local value = registers[src]
+            local field = K:get(fetch_u16(), "field")
+            local value = r[src]
             field.class:set_static_field(field, value)
         elseif op == 0x70 then -- `new`
             local dst = fetch_u16()
-            local class = k:get(fetch_u16(), "class")
-            registers[dst] = class:_new_uninitialised()
+            local class = K:get(fetch_u16(), "class")
+            r[dst] = class:_new_uninitialised()
         elseif op == 0x71 then -- `throw`
-            local obj = not_null(jvm, registers[fetch_u16()] :: t.JvmObjectRef)
+            local obj = not_null(jvm, r[fetch_u16()] :: t.JvmObjectRef)
             error(obj, 0)
         elseif op == 0x80 then -- `invoke`
             local dst: number? = fetch_u16()
@@ -256,17 +253,17 @@ local function step_ir(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitReason, t.Jv
                 dst = nil
             end
 
-            local method = k:get(fetch_u16(), "method")
+            local method = K:get(fetch_u16(), "method")
             local arg_start = fetch_u16()
             local arg_count = fetch_u8()
             local dispatch_type = DISPATCH_TYPES[fetch_u8()]
             local args = table.create(arg_count) :: { t.JvmValue }
-            table.move(registers, arg_start, arg_start + arg_count, 1, args)
-            local dispatched = dispatcher.dispatch(jvm, method, dispatch_type, f.class)
+            table.move(r, arg_start, arg_start + arg_count, 1, args)
+            local dispatched = dispatcher.dispatch(jvm, method, dispatch_type, f.method.class)
             invoke_inline(jvm, dispatched, t.Arguments.from_array(args, arg_count), dst)
             break
         elseif op == 0x81 then -- `return`
-            local value = registers[fetch_u16()]
+            local value = r[fetch_u16()]
             return "return", value
         else
             jvm:_internal_error(string.format("unimplemented opcode 0x%02X", op))
@@ -283,32 +280,39 @@ local function step(jvm: t.Jvm)
 
     local method = f.method
 
+    local exit_reason: t.StepExitReason, value: t.JvmValue
     if f.code.kind == "luau" then
         local depth = dbg.luau_stack_depth()
-        local ok, value = xpcall(f.code.closure, function(e: any)
+
+        local ok, _reason, _value = xpcall(f.code.closure, function(e: any)
             return coerce_error(jvm, e, depth)
-        end, jvm, unpack(f.args))
+        end, jvm, f.ctx, unpack(f.args))
 
         if not ok then
             error(value, 0)
         end
 
-        return frame.return_from_current_frame(jvm, thread, if method.type:get().returns == "void" then 0 else 1, value)
-    end
-
-    local exit_reason, value
-
-    local jit = f.code.jit
-    if jit then
-        exit_reason, value = jit(jvm, f)
+        exit_reason, value = _reason, _value
     else
-        exit_reason, value = step_ir(jvm, f)
+        local jit = f.code.jit
+        if jit then
+            exit_reason, value = jit(jvm, f)
+        else
+            exit_reason, value = interpret(jvm, f)
+        end
     end
 
     if exit_reason == "break" then
         return
     elseif exit_reason == "return" then
-        return frame.return_from_current_frame(jvm, thread, if method.type:get().returns == "void" then 0 else 1, value)
+        return frame.return_from_current_frame(
+            jvm,
+            thread,
+            if method.info.type:get().returns == "void" then 0 else 1,
+            value
+        )
+    else
+        jvm:_internal_error(`invalid exit reason {exit_reason}`)
     end
 end
 

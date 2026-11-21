@@ -86,7 +86,7 @@ function Jvm.get_loader(self: t.Jvm): t.JvmClassLoader
     end
 
     local root_frame = thread.stack[#thread.stack]
-    return root_frame.class.loader
+    return root_frame.method.class.loader
 end
 
 function Jvm.load_class(self: t.Jvm, name: string, initiating_loader: t.JvmClassLoader?): t.JvmClass

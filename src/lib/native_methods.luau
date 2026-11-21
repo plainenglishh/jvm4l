@@ -1,40 +1,47 @@
 local t = require("./t")
 
-local native_methods: { [string]: { [string]: t.NativeMethod } } = {}
+local native_methods: { [string]: { [string]: t.NativeMethodStep } } = {}
 
 native_methods["java/lang/Object"] = {
-    ["hashCode:()I"] = function(_jvm: t.Jvm, this: t.JvmObject): number
-        return this.hash_code
+    ["hashCode:()I"] = function(_jvm: t.Jvm, ctx: t.NativeContext, this: t.JvmObject): (t.StepExitReason, t.JvmValue)
+        return "return", this.hash_code
     end,
 }
 
 native_methods["java/lang/String"] = {
     ["replace:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"] = function(
         jvm: t.Jvm,
+        ctx: t.NativeContext,
         this: t.JvmObject,
         match: t.JvmObject,
         other: t.JvmObject
-    ): t.JvmObject
+    ): (t.StepExitReason, t.JvmValue)
         local this = this:inner_string()
         local match = match:inner_string()
         local replacement = other:inner_string()
         local new = string.gsub(this, match, replacement)
-        return jvm:create_string(new)
+        return "return", jvm:create_string(new)
     end,
 
     ["concat:(Ljava/lang/String;)Ljava/lang/String;"] = function(
         jvm: t.Jvm,
+        ctx: t.NativeContext,
         this: t.JvmObject,
         other: t.JvmObject
-    ): t.JvmObject
+    ): (t.StepExitReason, t.JvmValue)
         local this = this:inner_string()
         local other = other:inner_string()
-        return jvm:create_string(this .. other)
+        return "return", jvm:create_string(this .. other)
     end,
 }
 
 native_methods["java/lang/Throwable"] = {
-    ["fillInBacktrace:(I)V"] = function(jvm: t.Jvm, this: t.JvmObject, skip: number)
+    ["fillInBacktrace:(I)V"] = function(
+        jvm: t.Jvm,
+        ctx: t.NativeContext,
+        this: t.JvmObject,
+        skip: number
+    ): (t.StepExitReason, t.JvmValue)
         local stack: { t.StackFrame } = {}
 
         if jvm.current_thread then
@@ -42,9 +49,14 @@ native_methods["java/lang/Throwable"] = {
         end
 
         this._magic = { kind = "throwable", stack = stack }
+        return "return", nil
     end,
 
-    ["fillInStackTrace:()Ljava/lang/Throwable;"] = function(jvm: t.Jvm, this: t.JvmObject): t.JvmObject
+    ["fillInStackTrace:()Ljava/lang/Throwable;"] = function(
+        jvm: t.Jvm,
+        ctx: t.NativeContext,
+        this: t.JvmObject
+    ): (t.StepExitReason, t.JvmValue)
         local Throwable = jvm:load_class("java/lang/Throwable")
 
         local StackTraceElement = jvm:load_class("java/lang/StackTraceElement")
@@ -61,25 +73,35 @@ native_methods["java/lang/Throwable"] = {
             local frame = magic.stack[i]
 
             local elem = StackTraceElement:_new_uninitialised()
-            elem:set_field(declaring_class_ref, jvm:create_string(frame.class.name))
-            elem:set_field(method_name_ref, jvm:create_string(frame.method.name))
+            elem:set_field(declaring_class_ref, jvm:create_string(frame.method.class.name))
+            elem:set_field(method_name_ref, jvm:create_string(frame.method.info.name))
 
             trace[#trace + 1] = elem
         end
 
         this:set_field(stacktrace_ref, jvm:create_array(StackTraceElement, trace))
 
-        return this
+        return "return", this
     end,
 }
 
 native_methods["jvm4l/luau/Globals"] = {
-    ["print:([Ljava/lang/Object;)V"] = function(_jvm: t.Jvm, objects: t.JvmObject)
+    ["print:([Ljava/lang/Object;)V"] = function(
+        _jvm: t.Jvm,
+        ctx: t.NativeContext,
+        objects: t.JvmObject
+    ): (t.StepExitReason, t.JvmValue)
         print(unpack(objects:get_array_elements()))
+        return "return", nil
     end,
 
-    ["error:(Ljava/lang/Object;I)V"] = function(_jvm: t.Jvm, o: t.JvmObject, level: t.JvmInt)
-        error(o, level)
+    ["error:(Ljava/lang/Object;I)V"] = function(
+        _jvm: t.Jvm,
+        ctx: t.NativeContext,
+        o: t.JvmObject,
+        level: t.JvmInt
+    ): (t.StepExitReason, t.JvmValue)
+        return "return", error(o, level)
     end,
 }
 

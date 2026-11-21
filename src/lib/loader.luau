@@ -7,7 +7,7 @@ local t = require("./t")
 local native_methods = require("./native_methods")
 local Lazy = require("./utilities/Lazy")
 
-local function link_native(self: t.Jvm, class_name: string, signature: string): t.NativeMethod?
+local function link_native(self: t.Jvm, class_name: string, signature: string): t.NativeMethodStep?
     return self._settings.link_native(class_name, signature)
         or (native_methods[class_name] and native_methods[class_name][signature])
 end

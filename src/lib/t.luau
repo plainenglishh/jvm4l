@@ -187,7 +187,7 @@ export type _JvmSettings = {
 }
 
 --- Callback used to link native methods.
-export type LinkNativeCallback = (class_name: string, signature: string) -> NativeMethod?
+export type LinkNativeCallback = (class_name: string, signature: string) -> NativeMethodStep?
 --- Callback called at VM safepoints.
 export type InterruptCallback = (jvm: Jvm) -> ()
 --- Callback used to emit internal debug traces.
@@ -240,29 +240,40 @@ export type StackFrame = StackFrameJava | StackFrameLuau
 
 export type StackFrameJava = {
     read kind: "java",
-    read method: MethodInfo,
-    read class: JvmClass,
+    read method: MethodHandle,
     read constants: ConstantPool,
     read code: MethodCodeIr,
-
     read registers: { JvmValue },
     start_pc: number,
     pc: number,
-
     read invocation: Invocation?,
     read return_to: number?,
-    read jit: Step?,
+    read jit: MethodStepJava?,
 }
 
+--[=[
+    The reason for a step exit.
+]=]
 export type StepExitReason = "break" | "return"
-export type Step = (jvm: Jvm, frame: StackFrameJava) -> (StepExitReason, JvmValue)
+
+--[=[
+    A bytecode method runner. Either the global interpreter stepper, or a JIT compiled method.
+]=]
+export type MethodStepJava = (jvm: Jvm, frame: StackFrameJava) -> (StepExitReason, JvmValue)
+
+--[=[
+	A native method implementation.
+]=]
+export type NativeMethodStep = (jvm: Jvm, ctx: NativeContext, ...JvmValue) -> (StepExitReason, JvmValue)
+
+export type NativeContext = { [any]: any }
 
 export type StackFrameLuau = {
     read kind: "luau",
-    read method: MethodInfo,
-    read class: JvmClass,
+    read method: MethodHandle,
     read code: MethodCodeLuau,
-    read args: { JvmValue },
+    read args: Arguments,
+    read ctx: NativeContext,
     read invocation: Invocation?,
     read return_to: number?,
 }
@@ -575,11 +586,6 @@ export type MethodHandle = {
 }
 
 --[=[
-	A native method implementation.
-]=]
-export type NativeMethod = (jvm: Jvm, ...JvmValue) -> JvmValue
-
---[=[
 	The implementation of a `JvmMethod`.
 
 	This is independent of the `native` and `abstract` flags, a non-native 
@@ -592,7 +598,7 @@ export type MethodCode = MethodCodeJava | MethodCodeIr | MethodCodeLuau | Method
 ]=]
 export type MethodCodeLuau = {
     read kind: "luau",
-    read closure: NativeMethod,
+    read closure: NativeMethodStep,
 }
 
 --[=[
@@ -614,7 +620,7 @@ export type MethodCodeIr = {
     read code: buffer,
     read exceptions: ExceptionTable,
     read line_numbers: LineNumberTable?,
-    jit: Step?,
+    jit: MethodStepJava?,
 }
 
 export type LineNumberTable = { LineNumberTableEntry }

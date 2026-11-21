@@ -48,8 +48,7 @@ function frame.push_on(
 
         frame = {
             kind = "java",
-            method = method_info,
-            class = class,
+            method = method,
             constants = class._constant_pool or error("class has no constant pool"),
             code = method_info.code,
             registers = registers,
@@ -61,10 +60,10 @@ function frame.push_on(
     elseif method_info.code.kind == "luau" then
         frame = {
             kind = "luau",
-            method = method_info,
-            class = class,
+            method = method,
             code = method_info.code,
             args = args,
+            ctx = {},
             invocation = invocation,
         }
     end
@@ -105,8 +104,10 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
     local stack = thread.stack
     local frame = stack[#stack]
     local parent_frame = stack[#stack - 1]
+    local class = frame.method.class
+    local method_info = frame.method.info
 
-    local return_type = frame.method.type:get().returns
+    local return_type = method_info.type:get().returns
     local return_ok = false
     if return_type == "void" then
         return_ok = value == nil
@@ -117,7 +118,7 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
     if not return_ok then
         jvm:throw_exception(
             "java/lang/IncompatibleClassChangeError",
-            `invalid return from {frame.class.fqcn}{frame.method.name}{frame.method.descriptor}, got luau {type(value)}`
+            `invalid return from {class.fqcn}{method_info.name}{method_info.descriptor}, got luau {type(value)}`
         )
     end
 

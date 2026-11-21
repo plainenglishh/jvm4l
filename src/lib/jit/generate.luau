@@ -149,7 +149,7 @@ while true do
             local op = buffer.readu8(b, start_pc)
             local info = instructions[op]
             if not info then
-                return false, string.format("unknown opcode 0x%02X @ pc %i", op, start_pc - 1)
+                return false, string.format("unknown opcode 0x%02X @ pc 0x%08X", op, start_pc - 1)
             end
 
             writer:writeln(
@@ -168,7 +168,7 @@ while true do
                 start_pc = op_builder(writer, method, b, start_pc)
             else
                 print(writer:build())
-                return false, string.format("no builder for opcode 0x%02X @ pc %i", op, start_pc - 1)
+                return false, string.format("no builder for opcode 0x%02X @ pc 0x%02X", op, start_pc - 1)
             end
             writer:writeln("end\n")
         end
