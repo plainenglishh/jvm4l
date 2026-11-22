@@ -149,7 +149,7 @@ function JvmObject.set_array_element(self: t.JvmObject, index: number, value: t.
         error("^")
     end
 
-    if not typechecker.check_value(value, self._magic.element) then
+    if not typechecker.check_field_type(value, self._magic.element) then
         self.jvm:throw_exception("java/lang/ArrayStoreException")
     end
 

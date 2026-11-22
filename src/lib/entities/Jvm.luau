@@ -19,6 +19,14 @@ function Jvm.__display(self: t.Jvm): string
     return tostring(self)
 end
 
+Jvm.null = setmetatable({
+    null = true,
+}, {
+    __tostring = function(): string
+        return "null"
+    end,
+}) :: t.JvmNull
+
 function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
     local settings = {
         quantum = into_settings.quantum or 500,
@@ -117,6 +125,9 @@ function Jvm.load_class(self: t.Jvm, name: string, initiating_loader: t.JvmClass
     local loadClass = initiating_loader.class:resolve_method("loadClass", "(Ljava/lang/String;)Ljava/lang/Class")
     local class_o = initiating_loader:invoke(loadClass, self:create_string(fqcn))
     assert(type(class_o) == "table")
+    if class_o.null then
+        return self:throw_exception("java/lang/NullPointerException")
+    end
     return class_o:inner_class()
 end
 
@@ -219,7 +230,7 @@ function Jvm.create_string(self: t.Jvm, value: string): t.JvmObject
     return str_obj
 end
 
-function Jvm.create_array(self: t.Jvm, element: t.JvmType, size_or_values: number | { t.JvmValue }): t.JvmObject
+function Jvm.create_array(self: t.Jvm, element: t.JvmFieldType, size_or_values: number | { t.JvmValue }): t.JvmObject
     local elem_descriptor = jvm_type.type_to_descriptor(element)
     local class_name = `[{elem_descriptor}`
     local class = self:load_class(class_name)
@@ -255,7 +266,6 @@ function Jvm.create_exception(
     end
 
     local Exception = self:load_class(name, "bootstrap")
-    local message = if message then self:create_string(message) else nil
 
     local magic: t._MagicValue?
     if (not skip_stack_capture) and self.current_thread then
@@ -265,11 +275,16 @@ function Jvm.create_exception(
     local e = Exception:_new_uninitialised(magic)
 
     local Throwable = self._classes.bootstrap["java/lang/Throwable"]
-    local message_field = Throwable:resolve_field("message", "Ljava/lang/String;")
-    local cause_field = Throwable:resolve_field("cause", "Ljava/lang/Throwable;")
 
-    e:set_field(message_field, message)
-    e:set_field(cause_field, cause)
+    if message then
+        local message_field = Throwable:resolve_field("message", "Ljava/lang/String;")
+        e:set_field(message_field, self:create_string(message))
+    end
+
+    if cause then
+        local cause_field = Throwable:resolve_field("cause", "Ljava/lang/Throwable;")
+        e:set_field(cause_field, cause)
+    end
 
     return e
 end
@@ -320,7 +335,7 @@ end
 function Jvm.run(self: t.Jvm, main_path: string, ...: t.JvmValue)
     local ApplicationClassLoader = self:load_class("jvm4l/ApplicationClassLoader")
     local ApplicationClassLoader_new = ApplicationClassLoader:resolve_method("<init>", "(Ljava/lang/ClassLoader;)V")
-    local acl = ApplicationClassLoader:new(ApplicationClassLoader_new, nil)
+    local acl = ApplicationClassLoader:new(ApplicationClassLoader_new, Jvm.null)
     print(acl)
 end
 

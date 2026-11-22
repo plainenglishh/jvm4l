@@ -18,7 +18,7 @@ local function check_integer(value: any, min: number, max: number): boolean
     return false
 end
 
-function typechecker.check_value(value: t.JvmValue, target: t.JvmType): boolean
+function typechecker.check_field_type(value: t.JvmValue, target: t.JvmFieldType): boolean
     if target == "boolean" then
         return check_integer(value, 0, 1)
     elseif target == "byte" then
@@ -41,16 +41,12 @@ function typechecker.check_value(value: t.JvmValue, target: t.JvmType): boolean
     elseif target == "long" then
         return typeof(value) == "integer"
     elseif type(target) == "table" then
-        if value == nil then
-            return true
-        end
-
         if type(value) ~= "table" then
             return false
         end
 
-        if value.__type ~= "JvmObject" then
-            return false
+        if value.null then
+            return true
         end
 
         return value:instance_of(target)
@@ -59,13 +55,21 @@ function typechecker.check_value(value: t.JvmValue, target: t.JvmType): boolean
     return false
 end
 
+function typechecker.check_return_type(value: t.JvmValue, target: t.JvmReturnType): boolean
+    if target == "void" then
+        return type(value) == "table" and value.null
+    else
+        return typechecker.check_field_type(value, target)
+    end
+end
+
 --[=[
     Checks if `value` satisfies the given `FieldInfo`.
 
     Will resolve types.
 ]=]
 function typechecker.check_field(jvm: t.Jvm, value: t.JvmValue, class: t.JvmClass, target: t.FieldInfo): boolean
-    return typechecker.check_value(value, target.type:get())
+    return typechecker.check_field_type(value, target.type:get())
 end
 
 --[=[
@@ -73,7 +77,12 @@ end
 
     Will resolve types.
 ]=]
-function typechecker.check_method(jvm: t.Jvm, values: t.Arguments, class: t.JvmClass, target: t.MethodInfo): boolean
+function typechecker.check_method_args(
+    jvm: t.Jvm,
+    values: t.Arguments,
+    class: t.JvmClass,
+    target: t.MethodInfo
+): boolean
     local method_type = target.type:get()
     local static = target.static
     local expected_args = #method_type.arguments + if static then 0 else 1
@@ -90,7 +99,7 @@ function typechecker.check_method(jvm: t.Jvm, values: t.Arguments, class: t.JvmC
             return false
         end
 
-        if not typechecker.check_value(values[1], class) then
+        if not typechecker.check_field_type(values[1], class) then
             print("wrong this")
 
             return false
@@ -98,7 +107,7 @@ function typechecker.check_method(jvm: t.Jvm, values: t.Arguments, class: t.JvmC
     end
 
     for i = arg_start, #method_type.arguments do
-        if not typechecker.check_value(values[i], method_type.arguments[i]) then
+        if not typechecker.check_field_type(values[i], method_type.arguments[i]) then
             print("wrong arg", 1, values[i], method_type.arguments[i])
 
             return false

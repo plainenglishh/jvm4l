@@ -11,23 +11,34 @@ export type JvmDouble = t.JvmDouble
 export type JvmIntegral = t.JvmIntegral
 export type JvmReal = t.JvmReal
 export type JvmPrimitive = t.JvmPrimitive
+export type JvmNull = t.JvmNull
 export type JvmObjectRef = t.JvmObjectRef
 export type JvmValue = t.JvmValue
 export type IntoJvmValue = t.IntoJvmValue
-export type JvmType = t.JvmType
+export type JvmFieldType = t.JvmFieldType
+export type JvmReturnType = t.JvmReturnType
 export type JvmMethodType = t.JvmMethodType
 export type Arguments = t.Arguments
 export type Monitor = t.Monitor
+export type anyfunction = t.anyfunction
 export type Jvm = t.Jvm
 export type IntoJvmSettings = t.IntoJvmSettings
 export type LinkNativeCallback = t.LinkNativeCallback
 export type InterruptCallback = t.InterruptCallback
-export type TraceCallback = t.DebugTraceCallback
+export type DebugTraceCallback = t.DebugTraceCallback
+export type DebugDumpCallback = t.DebugDumpCallback
+export type JitLoadCallback = t.JitLoadCallback
 export type JvmClassLoader = t.JvmClassLoader
 export type GarbageCollector = t.GarbageCollector
 export type Thread = t.Thread
 export type ThreadState = t.ThreadState
 export type StackFrame = t.StackFrame
+export type StackFrameJava = t.StackFrameJava
+export type StepExitReason = t.StepExitReason
+export type MethodStepJava = t.MethodStepJava
+export type NativeMethodStep = t.NativeMethodStep
+export type NativeContext = t.NativeContext
+export type StackFrameLuau = t.StackFrameLuau
 export type Invocation = t.Invocation
 export type JvmClass = t.JvmClass
 export type JvmClassState = t.JvmClassState
@@ -39,10 +50,10 @@ export type FieldInfo = t.FieldInfo
 export type FieldHandle = t.FieldHandle
 export type MethodInfo = t.MethodInfo
 export type MethodHandle = t.MethodHandle
-export type NativeMethod = t.NativeMethodStep
 export type MethodCode = t.MethodCode
 export type MethodCodeLuau = t.MethodCodeLuau
 export type MethodCodeJava = t.MethodCodeJava
+export type MethodCodeIr = t.MethodCodeIr
 export type LineNumberTable = t.LineNumberTable
 export type LineNumberTableEntry = t.LineNumberTableEntry
 export type ExceptionTable = t.ExceptionTable
@@ -91,7 +102,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
     local message_ref = Throwable:resolve_field("message", "Ljava/lang/String;")
     local message = exception:get_field(message_ref) :: t.JvmObjectRef
     local message_str = ""
-    if message then
+    if not message.null then
         message_str = `: {message:inner_string()}`
     end
 

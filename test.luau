@@ -7,7 +7,7 @@ local function link_native(class_name: string, signature: string): jvm4l.NativeM
     if class_name == "jvm4l/test/Test" and signature == "print_int:(I)V" then
         return function(jvm, ctx, value)
             print(value)
-            return "return", nil
+            return "return", jvm.null
         end
     elseif class_name == "jvm4l/test/Test" and signature == "error:()V" then
         return function(jvm: jvm4l.Jvm, ctx)
@@ -18,7 +18,7 @@ local function link_native(class_name: string, signature: string): jvm4l.NativeM
             local Test = jvm:load_class("jvm4l//testTest")
             local error_wrapper = Test:resolve_method("error_wrapper", "()V")
             Test:invoke_static(error_wrapper)
-            return "return", nil
+            return "return", jvm.null
         end
     elseif class_name == "jvm4l/ApplicationClassLoader" and signature == "findClassBytes:(Ljava/lang/String;)[B" then
         return function(jvm: jvm4l.Jvm, ctx, name: jvm4l.JvmValue)

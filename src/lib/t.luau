@@ -37,8 +37,10 @@ export type JvmIntegral = JvmInt | JvmLong
 export type JvmReal = JvmFloat | JvmDouble
 --- Any runtime primitive.
 export type JvmPrimitive = JvmIntegral | JvmReal
+--- Null type.
+export type JvmNull = { read null: true }
 --- Any runtime object reference, including null.
-export type JvmObjectRef = JvmObject?
+export type JvmObjectRef = JvmObject | JvmNull
 
 --- Any runtime value.
 export type JvmValue = JvmPrimitive | JvmObjectRef
@@ -47,10 +49,11 @@ export type IntoJvmValue = boolean | string | number | integer | JvmObjectRef
 
 --// Actual Types
 
-export type JvmType = "boolean" | "byte" | "short" | "char" | "int" | "long" | "float" | "double" | JvmClass
+export type JvmFieldType = "boolean" | "byte" | "short" | "char" | "int" | "long" | "float" | "double" | JvmClass
+export type JvmReturnType = "void" | JvmFieldType
 export type JvmMethodType = {
-    arguments: { JvmType },
-    returns: JvmType | "void",
+    arguments: { JvmFieldType },
+    returns: JvmReturnType,
 }
 
 --------------------------------------------------------------------------------
@@ -97,7 +100,8 @@ export type anyfunction = (...any) -> ...any
 --[=[
     A class representing a JVM instance.
 
-    Handles thread scheduling and the registration of classes.
+    This class serves as the root of a JVM instance, and has the ultimate
+    responsibility of the JVM lifecycle and public API, except where delegated.
 ]=]
 export type Jvm = setmetatable<
     {
@@ -119,6 +123,8 @@ export type Jvm = setmetatable<
         __tostring: (self: Jvm) -> string,
         __display: (self: Jvm) -> string,
 
+        null: JvmNull,
+
         new: (settings: IntoJvmSettings) -> Jvm,
 
         create_thread: (self: Jvm, daemon: boolean, runnable: MethodInfo?) -> Thread,
@@ -134,7 +140,7 @@ export type Jvm = setmetatable<
         _create_interned_method: (self: Jvm, class: JvmClass, method_info: MethodInfo) -> MethodHandle,
 
         create_string: (self: Jvm, value: string) -> JvmObject,
-        create_array: (self: Jvm, element: JvmType, size_or_values: number | { JvmValue }) -> JvmObject,
+        create_array: (self: Jvm, element: JvmFieldType, size_or_values: number | { JvmValue }) -> JvmObject,
 
         create_exception: (
             self: Jvm,
@@ -248,7 +254,6 @@ export type StackFrameJava = {
     pc: number,
     read invocation: Invocation?,
     read return_to: number?,
-    read jit: MethodStepJava?,
 }
 
 --[=[
@@ -465,6 +470,8 @@ export type JvmObject = setmetatable<
         __tostring: (self: JvmObject) -> string,
         __display: (self: JvmObject) -> string,
 
+        null: false,
+
         --[=[
 			Creates a new `Object` without calling initialisers.
 
@@ -504,7 +511,7 @@ export type _MagicValue =
     | {
         kind: "array", -- synthetic array classes
         length: number,
-        element: JvmType,
+        element: JvmFieldType,
         values: { JvmValue },
     }
     | {
@@ -531,7 +538,7 @@ export type FieldInfo = {
     read name: string,
     read descriptor: string,
     read signature: string,
-    read type: Lazy.Lazy<JvmType>,
+    read type: Lazy.Lazy<JvmFieldType>,
 
     read public: boolean,
     read private: boolean,

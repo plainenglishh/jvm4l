@@ -49,7 +49,7 @@ native_methods["java/lang/Throwable"] = {
         end
 
         this._magic = { kind = "throwable", stack = stack }
-        return "return", nil
+        return "return", jvm.null
     end,
 
     ["fillInStackTrace:()Ljava/lang/Throwable;"] = function(
@@ -87,12 +87,12 @@ native_methods["java/lang/Throwable"] = {
 
 native_methods["jvm4l/luau/Globals"] = {
     ["print:([Ljava/lang/Object;)V"] = function(
-        _jvm: t.Jvm,
+        jvm: t.Jvm,
         ctx: t.NativeContext,
         objects: t.JvmObject
     ): (t.StepExitReason, t.JvmValue)
         print(unpack(objects:get_array_elements()))
-        return "return", nil
+        return "return", jvm.null
     end,
 
     ["error:(Ljava/lang/Object;I)V"] = function(

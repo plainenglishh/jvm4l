@@ -17,7 +17,7 @@ function frame.push_on(
     local method_info = method.info
     local class = method.class
 
-    if not typechecker.check_method(jvm, args, class, method_info) then
+    if not typechecker.check_method_args(jvm, args, class, method_info) then
         jvm:throw_exception("java/lang/IncompatibleClassChangeError", "typechecking failed")
     end
 
@@ -98,7 +98,7 @@ local function complete_invocation(invocation: t.Invocation, value: t.JvmValue)
 end
 
 --[=[
-    Completes the most recent frame, returning `value`.
+    Completes the most recent frame, returning `value`. Handles typechecking.
 ]=]
 function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: number, value: t.JvmValue)
     local stack = thread.stack
@@ -108,17 +108,12 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
     local method_info = frame.method.info
 
     local return_type = method_info.type:get().returns
-    local return_ok = false
-    if return_type == "void" then
-        return_ok = value == nil
-    else
-        return_ok = typechecker.check_value(value, return_type)
-    end
+    local return_ok = typechecker.check_return_type(value, return_type)
 
     if not return_ok then
         jvm:throw_exception(
             "java/lang/IncompatibleClassChangeError",
-            `invalid return from {class.fqcn}{method_info.name}{method_info.descriptor}, got luau {type(value)}`
+            `invalid return from {class.fqcn}.{method_info.name}{method_info.descriptor}, got {type(value)}`
         )
     end
 

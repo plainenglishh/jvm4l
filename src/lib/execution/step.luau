@@ -33,7 +33,7 @@ local function invoke_inline(
 end
 
 local function not_null(jvm: t.Jvm, value: t.JvmObjectRef): t.JvmObject
-    if value == nil then
+    if value.null then
         return jvm:throw_exception("java/lang/NullPointerException")
     end
 
@@ -112,7 +112,7 @@ local DISPATCH_TYPES: { [number]: dispatcher.DispatchType } = {
     2. anything that pushes or pops stack frames (no instruction can both push and pop a frame so that the depth remains the same)
     3. thread synchronisation (requires manual breaks in opcode impls)
 ]=]
-local function interpret(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitReason, t.JvmValue)
+local function step_interpreter(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitReason, t.JvmValue)
     local K = f.constants
     local ir = f.code
     local pc = f.pc
@@ -271,7 +271,21 @@ local function interpret(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitReason, t.
     end
 
     f.pc = pc
-    return "break", nil
+    return "break", jvm.null
+end
+
+local function step_native(jvm: t.Jvm, f: t.StackFrameLuau): (t.StepExitReason, t.JvmValue)
+    local depth = dbg.luau_stack_depth()
+
+    local ok, exit_reason, value = xpcall(f.code.closure, function(e: any)
+        return coerce_error(jvm, e, depth)
+    end, jvm, f.ctx, unpack(f.args))
+
+    if not ok then
+        error(value, 0)
+    end
+
+    return exit_reason, value
 end
 
 local function step(jvm: t.Jvm)
@@ -281,25 +295,13 @@ local function step(jvm: t.Jvm)
     local method = f.method
 
     local exit_reason: t.StepExitReason, value: t.JvmValue
+
     if f.code.kind == "luau" then
-        local depth = dbg.luau_stack_depth()
-
-        local ok, _reason, _value = xpcall(f.code.closure, function(e: any)
-            return coerce_error(jvm, e, depth)
-        end, jvm, f.ctx, unpack(f.args))
-
-        if not ok then
-            error(value, 0)
-        end
-
-        exit_reason, value = _reason, _value
+        exit_reason, value = step_native(jvm, f)
+    elseif f.code.jit then
+        exit_reason, value = f.code.jit(jvm, f)
     else
-        local jit = f.code.jit
-        if jit then
-            exit_reason, value = jit(jvm, f)
-        else
-            exit_reason, value = interpret(jvm, f)
-        end
+        exit_reason, value = step_interpreter(jvm, f)
     end
 
     if exit_reason == "break" then
@@ -309,7 +311,7 @@ local function step(jvm: t.Jvm)
             jvm,
             thread,
             if method.info.type:get().returns == "void" then 0 else 1,
-            value
+            value or jvm.null -- coerce nil to null
         )
     else
         jvm:_internal_error(`invalid exit reason {exit_reason}`)

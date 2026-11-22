@@ -6,7 +6,7 @@ function jvm_type.resolve_field_descriptor(
     descriptor: string,
     loader: t.JvmClassLoader,
     i: number?
-): (t.JvmType, number)
+): (t.JvmFieldType, number)
     local i = i or 1
 
     local first_char = string.sub(descriptor, i, i)
@@ -81,7 +81,7 @@ function jvm_type.resolve_method_descriptor(jvm: t.Jvm, descriptor: string, load
     }
 end
 
-function jvm_type.type_to_descriptor(ty: t.JvmType): string
+function jvm_type.type_to_descriptor(ty: t.JvmFieldType): string
     if ty == "boolean" then
         return "Z"
     elseif ty == "byte" then
@@ -107,7 +107,7 @@ function jvm_type.type_to_descriptor(ty: t.JvmType): string
     end
 end
 
-function jvm_type.words(ty: t.JvmType): number
+function jvm_type.words(ty: t.JvmFieldType): number
     if ty == "long" or ty == "double" then
         return 2
     end
