@@ -181,7 +181,7 @@ while true do
         end
     end
 
-    writer:writeln('else\nerror("bad jump target")\nend\nend\nend\n\nreturn step')
+    writer:writeln('else\nerror(string.format("bad jump target 0x%%08X", pc))\nend\nend\nend\n\nreturn step')
 
     return true, writer:build()
 end

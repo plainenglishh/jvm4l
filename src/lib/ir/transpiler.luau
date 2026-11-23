@@ -277,6 +277,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
 
             local kmethod = fetch_u16()
             local method = k:get(kmethod, "method")
+            print(method.info.signature)
             local arg_words = descriptors.argument_words(method.info.descriptor)
             local arg_count = #arg_words
             if op ~= 0xB8 then
@@ -284,14 +285,14 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
             end
 
             local void = string.sub(method.info.descriptor, -1, -1) == "V"
-            local rsrc = (stack_depth - arg_count) + 1
+            local rsrc = if arg_count == 0 then 0 else (stack_depth - arg_count) + 1
             stack_depth -= arg_count
 
             if void then
-                emit.invoke(ir, 0, kmethod, rsrc, arg_count, dispatch_type)
+                emit.invoke(ir, 0, kmethod, arg_count, rsrc, dispatch_type)
             else
                 local rdst = push_stack_register("1")
-                emit.invoke(ir, rdst, kmethod, rsrc, arg_count, dispatch_type)
+                emit.invoke(ir, rdst, kmethod, arg_count, rsrc, dispatch_type)
             end
         elseif op == 0xBB then -- `new`
             local rdst = push_stack_register("1")
@@ -334,7 +335,9 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
     end
 
     dbg.dump_artifact(jvm, `ir-{method.info.name}.asm`, dissasembler.disassemble(ir, handlers))
+    local o_start = os.clock()
     ir = optimiser.optimise(ir, handlers, locals_start, 2)
+    local o_time_taken = (os.clock() - o_start) * 1000
     dbg.dump_artifact(jvm, `ir-{method.info.name}-optimised.asm`, dissasembler.disassemble(ir, handlers))
 
     local ir_code: t.MethodCodeIr = {
@@ -350,11 +353,12 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
     local time_taken = (os.clock() - start) * 1000
     dbg.trace(
         jvm,
-        "transpiled `%s.%s` to IR in %.3fms (%i instructions)",
+        "transpiled `%s.%s` to IR in %.3fms (%i instructions, %.3fms optimising)",
         method.class.fqcn,
         method.info.signature,
         time_taken,
-        instructions
+        instructions,
+        o_time_taken
     )
     return ir_code
 end

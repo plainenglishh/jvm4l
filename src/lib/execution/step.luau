@@ -255,8 +255,8 @@ local function step_interpreter(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitRea
             end
 
             local method = K:get(fetch_u16(), "method")
-            local arg_start = fetch_u16()
             local arg_count = fetch_u8()
+            local arg_start = fetch_u16()
             local dispatch_type = DISPATCH_TYPES[fetch_u8()]
             local args = table.create(arg_count) :: { t.JvmValue }
             table.move(r, arg_start, arg_start + arg_count, 1, args)

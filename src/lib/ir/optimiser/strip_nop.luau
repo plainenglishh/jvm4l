@@ -5,7 +5,7 @@ local function strip_nops(ir: buffer, handlers: { t.ExceptionHandler }): buffer
     local old_len = buffer.len(ir)
     local pc_map: { [number]: number } = {}
     local pending_nops: { number } = {}
-    local survivors: { { old_pc: number, new_pc: number, size: number, insn: instructions.InstructionInfo } } = {}
+    local survivors: { { old_pc: number, new_pc: number, size: number, insn: instructions.Instruction } } = {}
 
     local old_pc = 0
     local new_pc = 0
@@ -13,7 +13,8 @@ local function strip_nops(ir: buffer, handlers: { t.ExceptionHandler }): buffer
     while old_pc < old_len do
         local op = buffer.readu8(ir, old_pc)
         local insn = instructions[op]
-        assert(insn and insn.size)
+        assert(insn)
+        local size = insn.sizeof(ir, old_pc)
 
         if op == 0x00 then
             table.insert(pending_nops, old_pc)
@@ -27,13 +28,13 @@ local function strip_nops(ir: buffer, handlers: { t.ExceptionHandler }): buffer
             table.insert(survivors, {
                 old_pc = old_pc,
                 new_pc = new_pc,
-                size = insn.size,
+                size = size,
                 insn = insn,
             })
-            new_pc += insn.size
+            new_pc += size
         end
 
-        old_pc += insn.size
+        old_pc += size
     end
 
     for _, nop_pc in pending_nops do
@@ -50,9 +51,9 @@ local function strip_nops(ir: buffer, handlers: { t.ExceptionHandler }): buffer
     for _, item in survivors do
         buffer.copy(compacted, item.new_pc, ir, item.old_pc, item.size)
 
-        if item.insn.can_jump and item.insn.operands ~= "variable" then
+        if item.insn.can_jump then
             for _, operand in item.insn.operands do
-                if operand.usage == "jump_target" then
+                if operand.type == "jump_target" then
                     local target_offset = item.new_pc + operand.offset
                     local old_target = buffer.readu32(compacted, target_offset)
                     local new_target =

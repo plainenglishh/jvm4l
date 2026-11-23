@@ -136,15 +136,15 @@ function emit.invoke(
     ir: BufferWriter,
     rdst: number,
     kmethod: number,
-    rsrc: number,
     arg_count: number,
+    rsrc: number,
     dispatch_type: number
 )
     ir:write_u8(0x80)
     ir:write_u16(rdst)
     ir:write_u16(kmethod)
-    ir:write_u16(rsrc)
     ir:write_u8(arg_count)
+    ir:write_u16(rsrc)
     assert(dispatch_type >= 0 and dispatch_type <= 3)
     ir:write_u8(dispatch_type)
 end

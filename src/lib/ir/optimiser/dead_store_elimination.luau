@@ -8,9 +8,8 @@ local function dead_store_elimination(ir: buffer, blocks: { analysis.BasicBlock 
         while pc <= block.end_pc do
             local op = buffer.readu8(ir, pc)
             local insn = instructions[op]
-            assert(insn and insn.size)
             table.insert(insns, pc)
-            pc += insn.size
+            pc += insn.sizeof(ir, pc)
         end
 
         local live: { [number]: boolean } = {}
@@ -20,25 +19,24 @@ local function dead_store_elimination(ir: buffer, blocks: { analysis.BasicBlock 
             local op = buffer.readu8(ir, start_pc)
 
             local insn = instructions[op]
-            assert(insn.operands ~= "variable")
 
             if op == 0x01 then
                 local dst = buffer.readu16(ir, start_pc + 1)
                 local is_live = (dst >= local_start_reg) or live[dst]
                 if not is_live then
-                    buffer.fill(ir, start_pc, 0x00, insn.size)
+                    buffer.fill(ir, start_pc, 0x00, insn.sizeof(ir, start_pc))
                     continue
                 end
             end
 
             for _, operand in insn.operands do
-                if operand.usage == "reg_dst" then
+                if operand.type == "register" and operand.direction == "dst" then
                     local dst = buffer.readu16(ir, start_pc + operand.offset)
                     live[dst] = nil
                 end
             end
             for _, operand in insn.operands do
-                if operand.usage == "reg_src" then
+                if operand.type == "register" and operand.direction == "src" then
                     local src = buffer.readu16(ir, start_pc + operand.offset)
                     live[src] = true
                 end

@@ -15,7 +15,7 @@ export type BasicBlock = {
 local analysis = {}
 
 function analysis.basic_blocks(b: buffer, handlers: { t.ExceptionHandler }): { BasicBlock }
-    local pc = 0
+    local start_pc = 0
     local len = buffer.len(b)
     if len == 0 then
         return {}
@@ -32,19 +32,15 @@ function analysis.basic_blocks(b: buffer, handlers: { t.ExceptionHandler }): { B
         end
     end
 
-    while pc < len do
-        local op = buffer.readu8(b, pc)
-        local start_pc = pc
+    while start_pc < len do
+        local op = buffer.readu8(b, start_pc)
 
         local insn = instructions[op]
         if not insn then
             error(string.format("invalid opcode 0x%02X at 0x%08X", op, start_pc))
         end
-        if not insn.size then
-            error("variable length opcodes not yet supported")
-        end
 
-        pc += insn.size
+        local next_pc = start_pc + insn.sizeof(b, start_pc)
 
         local target: number? = nil
         local is_unconditional_jump = (op == 0x50)
@@ -60,17 +56,17 @@ function analysis.basic_blocks(b: buffer, handlers: { t.ExceptionHandler }): { B
             assert(target, "jump instruction missing target")
             boundary_set[target] = true
 
-            if pc < len then
-                boundary_set[pc] = true
+            if next_pc < len then
+                boundary_set[next_pc] = true
             end
         elseif is_return then
-            if pc < len then
-                boundary_set[pc] = true
+            if next_pc < len then
+                boundary_set[start_pc] = true
             end
         end
 
-        if insn.breaks and pc < len then
-            boundary_set[pc] = true
+        if insn.breaks and next_pc < len then
+            boundary_set[next_pc] = true
         end
 
         last_insn_info[start_pc] = {
@@ -79,6 +75,8 @@ function analysis.basic_blocks(b: buffer, handlers: { t.ExceptionHandler }): { B
             target = target,
             falls_through = not (is_unconditional_jump or is_return),
         }
+
+        start_pc = next_pc
     end
 
     local boundaries: { number } = {}

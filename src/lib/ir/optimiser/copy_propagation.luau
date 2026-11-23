@@ -17,6 +17,7 @@ local function kill_register(copies: { [number]: number }, reg: number)
     end
 end
 
+-- TODO! preserve layout for invoke
 local function copy_propagation(ir: buffer, blocks: { analysis.BasicBlock })
     for _, block in blocks do
         local copies: { [number]: number } = {}
@@ -26,10 +27,10 @@ local function copy_propagation(ir: buffer, blocks: { analysis.BasicBlock })
             local op = buffer.readu8(ir, pc)
             local insn = instructions[op]
             assert(insn)
-            assert(insn.operands ~= "variable" and insn.size)
+            local size = insn.sizeof(ir, pc)
 
             for _, operand in insn.operands do
-                if operand.usage == "reg_src" then
+                if operand.type == "register" and operand.direction == "src" then
                     local offset = pc + operand.offset
                     local old_reg = buffer.readu16(ir, offset)
                     local root_reg = resolve(copies, old_reg)
@@ -40,7 +41,7 @@ local function copy_propagation(ir: buffer, blocks: { analysis.BasicBlock })
             end
 
             for _, operand in insn.operands do
-                if operand.usage == "reg_dst" then
+                if operand.type == "register" and operand.direction == "dst" then
                     local offset = pc + operand.offset
                     local dst_reg = buffer.readu16(ir, offset)
                     kill_register(copies, dst_reg)
@@ -52,13 +53,13 @@ local function copy_propagation(ir: buffer, blocks: { analysis.BasicBlock })
                 local src = buffer.readu16(ir, pc + 3)
 
                 if src == dst then
-                    buffer.fill(ir, pc, 0x00, insn.size)
+                    buffer.fill(ir, pc, 0x00, size)
                 else
                     copies[dst] = src
                 end
             end
 
-            pc += insn.size
+            pc += size
         end
     end
 end

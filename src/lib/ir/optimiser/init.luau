@@ -14,7 +14,7 @@ function optimiser.optimise(
     local blocks = analysis.basic_blocks(ir, handlers)
 
     if level > 0 then
-        copy_propagation(ir, blocks)
+        --copy_propagation(ir, blocks)
         dead_store_elimination(ir, blocks, locals_start_reg)
     end
 

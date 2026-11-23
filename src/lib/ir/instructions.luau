@@ -14,88 +14,136 @@
     4. the ir transpiler (`src/lib/ir/*.luau`).
 ]]
 
-export type OperandType = "u8" | "i8" | "u16" | "i16" | "u32" | "i32" | "f32" | "i64" | "f64"
-export type OperandUsage = "reg_dst" | "reg_src" | "constant" | "jump_target" | "literal" | "dispatch_type"
+--[[
+    Instruction Format:
+        `<opcode:u8>{<operand:Operand>}`
 
-export type Operand = {
-    type: OperandType,
-    usage: OperandUsage,
+    Operand Formats:
+        register = `<reg:u16>`
+        register_array = `<count:u8>{<reg:u16>}`
+        literal:
+            i32 = `<value:i32>`
+            f32 = `<value:f32>`
+            i64 = `<value:i64>`
+            f64 = `<value:f64>`
+        constant` = `<const:u16>`
+        jump_target = `<target:u32>`
+        dispatch_type = `<type:u8>` where:
+            0 = VIRTUAL
+            1 = SPECIAL
+            2 = STATIC
+            _ = INVALID
+        variable `<len:u16>{<data:u8>}`
+    ]]
+
+--- An Instruction or Operand size.
+export type Size = number | "variable"
+export type Operand = IntoOperand & {
     offset: number,
     size: number,
 }
 
-export type IntoOperand = {
-    type: OperandType,
-    usage: OperandUsage,
-}
+export type IntoOperand =
+    {
+        type: "register",
+        direction: "dst" | "src",
+    }
+    | {
+        type: "register_block",
+    }
+    | {
+        type: "literal",
+        literal_type: "i32" | "f32" | "i64" | "f64",
+    }
+    | {
+        type: "constant" | "jump_target" | "dispatch_type" | "variable",
+    }
 
-export type Operands = { Operand } | "variable"
-export type IntoOperands = { IntoOperand } | "variable"
+local function sizeof_intooperand(operand: IntoOperand): Size
+    if operand.type == "register" then
+        return 2
+    elseif operand.type == "register_block" then
+        return 3
+    elseif operand.type == "literal" then
+        if operand.literal_type == "i32" or operand.literal_type == "f32" then
+            return 4
+        elseif operand.literal_type == "i64" or operand.literal_type == "f64" then
+            return 8
+        else
+            error("unsupported operand type")
+        end
+    elseif operand.type == "constant" then
+        return 2
+    elseif operand.type == "jump_target" then
+        return 4
+    elseif operand.type == "dispatch_type" then
+        return 1
+    elseif operand.type == "variable" then
+        return "variable"
+    else
+        error("unsupported operand type" .. operand.type)
+    end
+end
 
-export type InstructionInfo = {
+export type Operands = { Operand }
+export type IntoOperands = { IntoOperand }
+
+export type Instruction = {
     read opcode: number,
     read name: string,
-    read size: number?,
+    read size: Size,
     read operands: Operands,
-
     --- Whether this instruction requires a step burst to break (e.g. on method invocation, scheduler boundary, method return, etc)
     read breaks: boolean,
     --- Whether this instruction can jump.
     read can_jump: boolean,
     --- Whether this instruction can fail.
     read fallible: boolean,
+    --- Callback used to determine the size of a potentially variable-length instruction.
+    read sizeof: (ir: buffer, start_pc: number) -> number,
 }
 
-type IntoInstructionInfo = {
+type IntoInstruction = {
     operands: IntoOperands?,
     breaks: boolean?,
     fallible: boolean?,
 }
 
-local INSTRUCTIONS: { [number]: InstructionInfo } = {}
+local INSTRUCTIONS: { [number]: Instruction } = {}
 
-local function DEFINE_OP(op: number, name: string, into: IntoInstructionInfo?)
-    local into: IntoInstructionInfo = into or {}
+local function DEFINE_OP(op: number, name: string, into: IntoInstruction?)
+    local into: IntoInstruction = into or {}
+    local into_operands: IntoOperands = into.operands or {}
 
-    local size: number? = nil
     local can_jump = false
-    local operands: Operands
-    if into.operands ~= "variable" then
-        operands = {}
-        local offset = 1
+    local operands: Operands = {}
 
-        for _, into_operand in (into.operands or {}) :: { IntoOperand } do
-            local op_size: number
-            if into_operand.type == "u8" or into_operand.type == "i8" then
-                op_size = 1
-            elseif into_operand.type == "u16" or into_operand.type == "i16" then
-                op_size = 2
-            elseif into_operand.type == "u32" or into_operand.type == "i32" or into_operand.type == "f32" then
-                op_size = 4
-            elseif into_operand.type == "i64" or into_operand.type == "f64" then
-                op_size = 8
-            else
-                error("bad")
-            end
+    local encountered_variable = false
+    local offset = 1
+    local base_size = 0
+    for i, into_operand: IntoOperand in into_operands do
+        assert(not encountered_variable, "variable operand must be last")
 
-            if into_operand.usage == "jump_target" then
-                can_jump = true
-            end
+        local operand = table.clone(into_operand) :: Operand
+        operand.offset = offset
 
-            table.insert(operands, {
-                type = into_operand.type,
-                usage = into_operand.usage,
-                offset = offset,
-                size = op_size,
-            })
-
-            offset += op_size
+        if operand.type == "jump_target" then
+            can_jump = true
         end
 
-        size = offset
-    else
-        operands = "variable"
+        if into_operand.type == "variable" then
+            encountered_variable = true
+            base_size = offset
+        else
+            local operand_size = sizeof_intooperand(into_operand)
+            assert(operand_size ~= "variable")
+            offset += operand_size
+            operand.size = operand_size
+        end
+        operands[i] = operand
     end
+
+    local size: Size = if encountered_variable then "variable" else offset
 
     INSTRUCTIONS[op] = table.freeze({
         opcode = op,
@@ -105,6 +153,15 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstructionInfo?)
         breaks = into.breaks or false,
         can_jump = can_jump,
         fallible = into.fallible or false,
+        sizeof = function(ir: buffer, start_pc: number): number
+            assert(buffer.readu8(ir, start_pc) == op)
+            if size ~= "variable" then
+                return size
+            end
+
+            local len = buffer.readu8(ir, start_pc + base_size)
+            return base_size + len + 1
+        end,
     })
 end
 
@@ -114,8 +171,8 @@ DEFINE_OP(0x00, "nop")
 
 DEFINE_OP(0x01, "move", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" },
+        { type = "register" :: "register", direction = "dst" },
+        { type = "register" :: "register", direction = "src" },
     },
 })
 
@@ -123,42 +180,42 @@ DEFINE_OP(0x01, "move", {
 
 DEFINE_OP(0x10, "load_literal/null", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
+        { type = "register" :: "register", direction = "dst" },
     },
 })
 
 DEFINE_OP(0x11, "load_literal/int", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "i32", usage = "literal" },
+        { type = "register" :: "register", direction = "dst" },
+        { type = "literal" :: "literal", literal_type = "i32" },
     },
 })
 
 DEFINE_OP(0x12, "load_literal/float", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "f32", usage = "literal" },
+        { type = "register" :: "register", direction = "dst" },
+        { type = "literal" :: "literal", literal_type = "f32" },
     },
 })
 
 DEFINE_OP(0x13, "load_literal/long", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "i64", usage = "literal" },
+        { type = "register" :: "register", direction = "dst" },
+        { type = "literal" :: "literal", literal_type = "i64" },
     },
 })
 
 DEFINE_OP(0x14, "load_literal/double", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "f64", usage = "literal" },
+        { type = "register" :: "register", direction = "dst" },
+        { type = "literal" :: "literal", literal_type = "f64" },
     },
 })
 
 DEFINE_OP(0x15, "load_const", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "constant" },
+        { type = "register" :: "register", direction = "dst" },
+        { type = "constant" },
     },
     fallible = true,
 })
@@ -167,26 +224,26 @@ DEFINE_OP(0x15, "load_const", {
 
 DEFINE_OP(0x20, "add/int", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
+        { type = "register" :: "register", direction = "dst" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "register" :: "register", direction = "src" }, --rhs
     },
 })
 
 DEFINE_OP(0x21, "sub/int", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
+        { type = "register" :: "register", direction = "dst" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "register" :: "register", direction = "src" }, --rhs
     },
 })
 
 -- fast path for iinc
 DEFINE_OP(0x22, "add_literal/int", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "i32", usage = "literal" }, --rhs
+        { type = "register" :: "register", direction = "dst" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "literal" :: "literal", literal_type = "i32" }, --rhs
     },
 })
 
@@ -194,63 +251,63 @@ DEFINE_OP(0x22, "add_literal/int", {
 
 DEFINE_OP(0x40, "jump_if_eq/int", {
     operands = {
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-        { type = "u32", usage = "jump_target" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "register" :: "register", direction = "src" }, --rhs
+        { type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x41, "jump_if_ne/int", {
     operands = {
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-        { type = "u32", usage = "jump_target" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "register" :: "register", direction = "src" }, --rhs
+        { type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x42, "jump_if_lt/int", {
     operands = {
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-        { type = "u32", usage = "jump_target" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "register" :: "register", direction = "src" }, --rhs
+        { type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x43, "jump_if_ge/int", {
     operands = {
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-        { type = "u32", usage = "jump_target" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "register" :: "register", direction = "src" }, --rhs
+        { type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x44, "jump_if_gt/int", {
     operands = {
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-        { type = "u32", usage = "jump_target" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "register" :: "register", direction = "src" }, --rhs
+        { type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x45, "jump_if_le/int", {
     operands = {
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-        { type = "u32", usage = "jump_target" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "register" :: "register", direction = "src" }, --rhs
+        { type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x46, "jump_if_eq/ref", {
     operands = {
-        { type = "u16", usage = "reg_src" }, --lhs
-        { type = "u16", usage = "reg_src" }, --rhs
-        { type = "u32", usage = "jump_target" },
+        { type = "register" :: "register", direction = "src" }, --lhs
+        { type = "register" :: "register", direction = "src" }, --rhs
+        { type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x50, "jump", {
     operands = {
-        { type = "u32", usage = "jump_target" },
+        { type = "jump_target" },
     },
 })
 
@@ -258,34 +315,34 @@ DEFINE_OP(0x50, "jump", {
 
 DEFINE_OP(0x60, "get_field", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "reg_src" }, -- object
-        { type = "u16", usage = "constant" }, -- field
+        { type = "register" :: "register", direction = "dst" },
+        { type = "register" :: "register", direction = "src" }, -- object
+        { type = "constant" }, -- field
     },
     fallible = true,
 })
 
 DEFINE_OP(0x61, "set_field", {
     operands = {
-        { type = "u16", usage = "reg_dst" }, -- object
-        { type = "u16", usage = "reg_src" }, -- value
-        { type = "u16", usage = "constant" }, -- field
+        { type = "register" :: "register", direction = "dst" }, -- object
+        { type = "register" :: "register", direction = "src" }, -- value
+        { type = "constant" }, -- field
     },
     fallible = true,
 })
 
 DEFINE_OP(0x62, "get_static", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "constant" },
+        { type = "register" :: "register", direction = "dst" },
+        { type = "constant" },
     },
     fallible = true,
 })
 
 DEFINE_OP(0x63, "set_static", {
     operands = {
-        { type = "u16", usage = "reg_src" },
-        { type = "u16", usage = "constant" },
+        { type = "register" :: "register", direction = "src" },
+        { type = "constant" },
     },
     fallible = true,
 })
@@ -294,15 +351,15 @@ DEFINE_OP(0x63, "set_static", {
 
 DEFINE_OP(0x70, "new", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "constant" },
+        { type = "register" :: "register", direction = "dst" },
+        { type = "constant" },
     },
     fallible = true,
 })
 
 DEFINE_OP(0x71, "throw", {
     operands = {
-        { type = "u16", usage = "reg_src" },
+        { type = "register" :: "register", direction = "src" },
     },
     fallible = true,
 })
@@ -311,11 +368,10 @@ DEFINE_OP(0x71, "throw", {
 
 DEFINE_OP(0x80, "invoke", {
     operands = {
-        { type = "u16", usage = "reg_dst" },
-        { type = "u16", usage = "constant" }, -- method
-        { type = "u16", usage = "reg_src" }, -- arg_start
-        { type = "u8", usage = "literal" }, -- arg_count
-        { type = "u8", usage = "dispatch_type" },
+        { type = "register" :: "register", direction = "dst" },
+        { type = "constant" },
+        { type = "register_block" :: "register_block" },
+        { type = "dispatch_type" },
     },
     breaks = true,
     fallible = true,
@@ -323,7 +379,7 @@ DEFINE_OP(0x80, "invoke", {
 
 DEFINE_OP(0x81, "return", {
     operands = {
-        { type = "u16", usage = "reg_src" },
+        { type = "register" :: "register", direction = "src" },
     },
     breaks = true,
 })

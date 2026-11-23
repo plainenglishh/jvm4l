@@ -2,6 +2,13 @@
 
 - Basic object model is complete, bar special handling for inner classes.
 
+## NOW
+
+- [ ] unify IR types and usage
+- [ ] introduce `reg_src_block` and `reg_dst_block` operand types
+- [ ] fix DSE and copy prop to respect `reg_x_block`
+- [ ] add loop invariant hoisting
+
 ## Short Term Goals
 
 - [ ] internal fatal errors that halt the VM entirely, and shut it down w/o any unwinding (call it panic maybe?). permit no operations after this
