@@ -9,17 +9,17 @@ local function dissasemble_block(writer: StringBuilder.StringBuilder, ir: buffer
 
     while pc < block.end_pc do
         if pc ~= block.start_pc then
-            writer:write("  ")
+            writer:write("    ")
         end
         writer:write(string.format("0x%08X: ", pc))
 
         local op = buffer.readu8(ir, pc)
         pc += 1
-        local insn_info = instructions[op]
+        local insn = instructions[op]
 
-        writer:write(insn_info.name)
+        writer:write(insn.name)
 
-        for _, operand in insn_info.operands do
+        for _, operand in insn.operands do
             writer:write(" ")
 
             if operand.type == "register" then
@@ -77,28 +77,63 @@ local function dissasemble_block(writer: StringBuilder.StringBuilder, ir: buffer
             end
         end
 
+        if insn.fallible or insn.can_jump or insn.breaks then
+            writer:write(" (")
+            if insn.can_jump then
+                writer:write(">")
+            end
+
+            if insn.fallible then
+                writer:write("!")
+            end
+
+            if insn.breaks then
+                writer:write("*")
+            end
+            writer:write(")")
+        end
+
         writer:writeln("")
     end
 end
 
-function dissasembler.disassemble(ir: buffer, handlers: { t.ExceptionHandler }): string
+function dissasembler.disassemble(code: t.MethodCodeIr): string
     local writer = StringBuilder.new()
 
-    writer:writeln("code:")
-    local blocks = analysis.basic_blocks(ir, handlers)
+    writer:writeln("Registers:")
+    writer:writeln("    Null:   1 (R0)")
+    if code.temp_register_count > 0 then
+        writer:writeln("    Temp:   %i (R1 - R%i)", code.temp_register_count, code.temp_register_count)
+    else
+        writer:writeln("    Temp:   0 (none)")
+    end
+    if code.local_register_count > 0 then
+        writer:writeln(
+            "    Locals: %i (R%i - R%i)",
+            code.local_register_count,
+            code.local_register_start,
+            code.local_register_start + code.local_register_count - 1
+        )
+    else
+        writer:writeln("    Locals: 0 (none)")
+    end
+    writer:writeln("    Total:  %i", code.total_registers)
+
+    writer:writeln("\nCode:")
+    local blocks = analysis.basic_blocks(code.code, code.exceptions)
     for _, block in blocks do
-        writer:write("> ", block.id, block.start_pc)
-        dissasemble_block(writer, ir, block)
+        writer:write("  > ", block.id, block.start_pc)
+        dissasemble_block(writer, code.code, block)
     end
 
-    if #handlers > 0 then
-        writer:writeln("\nexceptions:")
-        for i, handler in handlers do
-            writer:writeln("  exception %i:", i)
-            writer:writeln("    start_pc   = 0x%08X", handler.start_pc)
-            writer:writeln("    end_pc     = 0x%08X", handler.end_pc)
-            writer:writeln("    handler_pc = 0x%08X", handler.handler_pc)
-            writer:writeln("    catch_type = %s", handler.catch_type)
+    if #code.exceptions > 0 then
+        writer:writeln("\nExceptions:")
+        for i, handler in code.exceptions do
+            writer:writeln("    Exception %i:", i)
+            writer:writeln("        start_pc:   0x%08X", handler.start_pc)
+            writer:writeln("        end_pc:     0x%08X", handler.end_pc)
+            writer:writeln("        handler_pc: 0x%08X", handler.handler_pc)
+            writer:writeln("        catch_type: %s", handler.catch_type)
         end
     end
 

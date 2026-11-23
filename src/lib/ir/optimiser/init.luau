@@ -5,20 +5,15 @@ local t = require("../t")
 local analysis = require("./analysis")
 local optimiser = {}
 
-function optimiser.optimise(
-    ir: buffer,
-    handlers: { t.ExceptionHandler },
-    locals_start_reg: number,
-    level: number
-): buffer
-    local blocks = analysis.basic_blocks(ir, handlers)
+function optimiser.optimise(code: t.MethodCodeIr, level: number)
+    local blocks = analysis.basic_blocks(code.code, code.exceptions)
 
     if level > 0 then
-        --copy_propagation(ir, blocks)
-        dead_store_elimination(ir, blocks, locals_start_reg)
+        copy_propagation(code.code, blocks)
+        dead_store_elimination(code.code, blocks, code.local_register_start)
     end
 
-    return strip_nop(ir, handlers)
+    (code :: any).code = strip_nop(code.code, code.exceptions)
 end
 
 return optimiser

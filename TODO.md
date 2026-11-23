@@ -4,8 +4,8 @@
 
 ## NOW
 
-- [ ] unify IR types and usage
-- [ ] introduce `reg_src_block` and `reg_dst_block` operand types
+- [X] unify IR types and usage
+- [X] introduce `reg_src_block` and `reg_dst_block` operand types
 - [ ] fix DSE and copy prop to respect `reg_x_block`
 - [ ] add loop invariant hoisting
 

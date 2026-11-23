@@ -111,7 +111,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
     local locals_start = temp_start + java_code.max_stack
 
     local function get_local_register(index: number): number
-        return locals_start + 1 --locals[index]
+        return locals_start + index
     end
 
     local instructions = 0
@@ -334,20 +334,23 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
         end
     end
 
-    dbg.dump_artifact(jvm, `ir-{method.info.name}.asm`, dissasembler.disassemble(ir, handlers))
-    local o_start = os.clock()
-    ir = optimiser.optimise(ir, handlers, locals_start, 2)
-    local o_time_taken = (os.clock() - o_start) * 1000
-    dbg.dump_artifact(jvm, `ir-{method.info.name}-optimised.asm`, dissasembler.disassemble(ir, handlers))
-
     local ir_code: t.MethodCodeIr = {
         kind = "ir",
         from_java = java_code,
+        temp_register_count = java_code.max_stack,
+        local_register_count = java_code.max_locals,
+        local_register_start = locals_start,
         total_registers = locals_start + java_code.max_locals,
         code = ir,
         exceptions = handlers,
         line_numbers = line_numbers,
     }
+
+    dbg.dump_artifact(jvm, `ir-{method.info.name}.asm`, dissasembler.disassemble(ir_code, handlers))
+    local o_start = os.clock()
+    optimiser.optimise(ir_code, 2)
+    local o_time_taken = (os.clock() - o_start) * 1000
+    dbg.dump_artifact(jvm, `ir-{method.info.name}-optimised.asm`, dissasembler.disassemble(ir_code))
 
     method.info.code = ir_code
     local time_taken = (os.clock() - start) * 1000

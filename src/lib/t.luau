@@ -623,6 +623,9 @@ export type MethodCodeJava = {
 export type MethodCodeIr = {
     read kind: "ir",
     read from_java: MethodCodeJava,
+    read temp_register_count: number,
+    read local_register_count: number,
+    read local_register_start: number,
     read total_registers: number,
     read code: buffer,
     read exceptions: ExceptionTable,
