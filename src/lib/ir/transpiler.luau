@@ -4,6 +4,7 @@ local t = require("../t")
 local BufferWriter = require("../utilities/BufferWriter")
 local dissasembler = require("./dissasembler")
 local emit = require("./emit")
+local optimiser = require("./optimiser")
 
 local function sign_extend_byte(byte: number): number
     return if byte >= 0x80 then byte - 0x100 else byte
@@ -106,8 +107,11 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
         return stack_depth + 1, size
     end
 
+    local temp_start = 1
+    local locals_start = temp_start + java_code.max_stack
+
     local function get_local_register(index: number): number
-        return java_code.max_stack + index + 1 --locals[index]
+        return locals_start + 1 --locals[index]
     end
 
     local instructions = 0
@@ -305,18 +309,13 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
 
     local ir = ir:build()
 
-    --// final stage: resolve jump targets
     for _, jump in jump_targets do
         buffer.writeu32(ir, jump.operand_pc, get_pc(jump.java_pc))
     end
 
-    --local stmp = os.clock()
-    --dbg.dump_artifact(jvm, `ir-{stmp}.out`, ir)
-    dbg.dump_artifact(jvm, `ir-{method.info.name}.asm`, dissasembler.disassemble(ir))
-
-    local exceptions: { t.ExceptionHandler } = {}
+    local handlers: { t.ExceptionHandler } = {}
     for i, exception in java_code.exceptions do
-        exceptions[i] = {
+        handlers[i] = {
             start_pc = get_pc(exception.start_pc),
             end_pc = get_pc(exception.end_pc),
             handler_pc = get_pc(exception.handler_pc),
@@ -334,12 +333,16 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
         end
     end
 
+    dbg.dump_artifact(jvm, `ir-{method.info.name}.asm`, dissasembler.disassemble(ir, handlers))
+    ir = optimiser.optimise(ir, handlers, locals_start, 2)
+    dbg.dump_artifact(jvm, `ir-{method.info.name}-optimised.asm`, dissasembler.disassemble(ir, handlers))
+
     local ir_code: t.MethodCodeIr = {
         kind = "ir",
         from_java = java_code,
-        total_registers = java_code.max_stack + java_code.max_locals + 1,
+        total_registers = locals_start + java_code.max_locals,
         code = ir,
-        exceptions = exceptions,
+        exceptions = handlers,
         line_numbers = line_numbers,
     }
 

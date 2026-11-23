@@ -121,7 +121,7 @@ end
 local function generate(method: t.MethodHandle): (boolean, string)
     local code = ir.ensure_transpiled(method.class.jvm, method)
     local b = code.code
-    local blocks = ir.analysis.basic_blocks(b)
+    local blocks = ir.analysis.basic_blocks(b, code.exceptions)
 
     local writer = StringBuilder.new()
 
@@ -174,8 +174,8 @@ while true do
         end
 
         writer:writeln("--// block end")
-        if block.next then
-            writer:writeln("pc = 0x%08X", block.next)
+        if block.fallthrough then
+            writer:writeln("pc = 0x%08X", block.fallthrough)
         else
             writer:writeln('error("missing return")')
         end

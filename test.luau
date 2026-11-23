@@ -6,7 +6,7 @@ local jit = require("./src/lib/jit")
 local function link_native(class_name: string, signature: string): jvm4l.NativeMethodStep?
     if class_name == "jvm4l/test/Test" and signature == "print_int:(I)V" then
         return function(jvm, ctx, value)
-            error(value)
+            print(value)
             return "return", jvm.null
         end
     elseif class_name == "jvm4l/test/Test" and signature == "print_string:(Ljava/lang/String;)V" then
@@ -79,11 +79,11 @@ local ok, err = pcall(function(...)
     jit.try_compile(vm, loop_ref)
 
     local start = os.clock()
-    for i = 1, 1 do
+    for i = 1, 5 do
         Test:invoke_static(test_ref)
     end
     local finish = os.clock()
-    local time_taken = ((finish - start) / 1) * 1000
+    local time_taken = ((finish - start) / 5) * 1000
     print(string.format("took %.3fms", time_taken))
 end)
 

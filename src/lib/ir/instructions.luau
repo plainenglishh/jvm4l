@@ -14,12 +14,23 @@
     4. the ir transpiler (`src/lib/ir/*.luau`).
 ]]
 
+export type OperandType = "u8" | "i8" | "u16" | "i16" | "u32" | "i32" | "f32" | "i64" | "f64"
+export type OperandUsage = "reg_dst" | "reg_src" | "constant" | "jump_target" | "literal" | "dispatch_type"
+
 export type Operand = {
-    type: "u8" | "i8" | "u16" | "i16" | "u32" | "i32" | "f32" | "i64" | "f64",
-    usage: "reg_dst" | "reg_src" | "constant" | "jump_target" | "literal" | "dispatch_type",
+    type: OperandType,
+    usage: OperandUsage,
+    offset: number,
+    size: number,
+}
+
+export type IntoOperand = {
+    type: OperandType,
+    usage: OperandUsage,
 }
 
 export type Operands = { Operand } | "variable"
+export type IntoOperands = { IntoOperand } | "variable"
 
 export type InstructionInfo = {
     read opcode: number,
@@ -36,7 +47,7 @@ export type InstructionInfo = {
 }
 
 type IntoInstructionInfo = {
-    operands: Operands?,
+    operands: IntoOperands?,
     breaks: boolean?,
     fallible: boolean?,
 }
@@ -48,33 +59,49 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstructionInfo?)
 
     local size: number? = nil
     local can_jump = false
+    local operands: Operands
     if into.operands ~= "variable" then
-        local new_size = 1
-        for _, operand in (into.operands or {}) :: { Operand } do
-            if operand.type == "u8" or operand.type == "i8" then
-                new_size += 1
-            elseif operand.type == "u16" or operand.type == "i16" then
-                new_size += 2
-            elseif operand.type == "u32" or operand.type == "i32" or operand.type == "f32" then
-                new_size += 4
-            elseif operand.type == "i64" or operand.type == "f64" then
-                new_size += 8
+        operands = {}
+        local offset = 1
+
+        for _, into_operand in (into.operands or {}) :: { IntoOperand } do
+            local op_size: number
+            if into_operand.type == "u8" or into_operand.type == "i8" then
+                op_size = 1
+            elseif into_operand.type == "u16" or into_operand.type == "i16" then
+                op_size = 2
+            elseif into_operand.type == "u32" or into_operand.type == "i32" or into_operand.type == "f32" then
+                op_size = 4
+            elseif into_operand.type == "i64" or into_operand.type == "f64" then
+                op_size = 8
             else
                 error("bad")
             end
 
-            if operand.usage == "jump_target" then
+            if into_operand.usage == "jump_target" then
                 can_jump = true
             end
+
+            table.insert(operands, {
+                type = into_operand.type,
+                usage = into_operand.usage,
+                offset = offset,
+                size = op_size,
+            })
+
+            offset += op_size
         end
-        size = new_size
+
+        size = offset
+    else
+        operands = "variable"
     end
 
     INSTRUCTIONS[op] = table.freeze({
         opcode = op,
         name = name,
         size = size,
-        operands = into.operands or {},
+        operands = operands,
         breaks = into.breaks or false,
         can_jump = can_jump,
         fallible = into.fallible or false,
