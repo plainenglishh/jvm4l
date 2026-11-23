@@ -92,7 +92,6 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
     end
 
     self._state = "initialising"
-    dbg.trace(self.jvm, "initialising class %s", self.fqcn)
 
     if self.super then
         self.super:_ensure_initialised()
@@ -112,11 +111,11 @@ function JvmClass._ensure_initialised(self: t.JvmClass)
     end
 
     self._state = "initialised"
+    dbg.trace(self.jvm, "initialised `%s`", self.fqcn)
 end
 
 function JvmClass._new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t.JvmObject
     assert(self._state ~= "error")
-    self:_ensure_initialised()
     return JvmObject._new(self.jvm, self, magic)
 end
 

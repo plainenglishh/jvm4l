@@ -243,6 +243,7 @@ local function step_interpreter(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitRea
         elseif op == 0x70 then -- `new`
             local dst = fetch_u16()
             local class = K:get(fetch_u16(), "class")
+            class:_ensure_initialised()
             r[dst] = class:_new_uninitialised()
         elseif op == 0x71 then -- `throw`
             local obj = not_null(jvm, r[fetch_u16()] :: t.JvmObjectRef)
@@ -282,7 +283,7 @@ local function step_native(jvm: t.Jvm, f: t.StackFrameLuau): (t.StepExitReason, 
     end, jvm, f.ctx, unpack(f.args))
 
     if not ok then
-        error(value, 0)
+        error(exit_reason, 0)
     end
 
     return exit_reason, value

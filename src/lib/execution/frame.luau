@@ -70,11 +70,11 @@ function frame.push_on(
 
     dbg.trace(
         jvm,
-        "pushed frame #%i on thread #%i (%s.%s)",
+        "pushed frame #%i (%s.%s) on thread #%i",
         #thread.stack + 1,
-        thread.id,
         class.fqcn,
-        method_info.signature
+        method_info.signature,
+        thread.id
     )
 
     table.insert(thread.stack, frame :: t.StackFrame)
@@ -127,6 +127,16 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
         assert(frame.return_to, "expected return_to for host invoke")
         parent_frame.registers[frame.return_to] = value
     end
+
+    dbg.trace(
+        jvm,
+        "returned from frame #%i (`%s.%s`) on thread #%i with `%*`",
+        #thread.stack + 1,
+        class.fqcn,
+        method_info.signature,
+        thread.id,
+        value
+    )
 end
 
 function frame.fail_invocation(invocation: t.Invocation, exception: t.JvmObject)

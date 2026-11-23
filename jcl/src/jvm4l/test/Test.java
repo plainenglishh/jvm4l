@@ -1,6 +1,7 @@
 package jvm4l.test;
 
 import static jvm4l.luau.Globals.error;
+import static jvm4l.luau.Globals.print;
 
 /**
  * Used for testing execution before application class loader is in a usable 
@@ -12,6 +13,7 @@ public class Test {
     }
 
     public static native void print_int(int value);
+    public static native void print_string(String value);
 
     private static int loop() {
         int i = 0;
@@ -22,7 +24,11 @@ public class Test {
     }
 
     public static void main() throws Exception {
-        int value = loop();
-        print_int(value);
+        try {
+            int value = loop();
+            print_int(value);
+        } catch (Throwable e) {
+            print_string("something bad has happened!");
+        }
     }
 }

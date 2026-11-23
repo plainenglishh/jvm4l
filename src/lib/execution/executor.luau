@@ -15,7 +15,7 @@ local function is_throwable(value: unknown): boolean
 end
 
 local function match_exception_handler(f: t.StackFrame, exception: t.JvmObject): t.ExceptionHandler?
-    assert(f.code.kind == "java")
+    assert(f.code.kind == "ir")
     for _, exception_handler in f.code.exceptions do
         if f.start_pc < exception_handler.start_pc or f.start_pc >= exception_handler.end_pc then
             continue
@@ -38,21 +38,20 @@ local function unwind_thread(jvm: t.Jvm, thread: t.Thread, target: t.Invocation,
     for i = stack_depth, 1, -1 do
         local f = stack[i]
 
+        if f.code.kind == "ir" then
+            local exception_handler = match_exception_handler(f, exception)
+            if exception_handler then
+                f.registers[1] = exception
+                f.pc = exception_handler.handler_pc
+                return true
+            end
+        end
+
         if f.invocation then
             frame.fail_invocation(f.invocation, exception)
 
             if f.invocation ~= target then
                 return false
-            end
-        end
-
-        if f.code.kind == "java" then
-            local exception_handler = match_exception_handler(f, exception)
-            if exception_handler then
-                table.clear(f.stack)
-                table.insert(f.stack, exception)
-                f.pc = exception_handler.handler_pc
-                return true
             end
         end
 

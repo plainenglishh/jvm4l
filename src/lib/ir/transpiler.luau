@@ -51,16 +51,19 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
     local java_code = method.info.code
     assert(java_code.kind == "java")
 
-    dbg.trace(jvm, `transpiling {method.class.fqcn}.{method.info.signature}`)
+    local start = os.clock()
+
     local bc = java_code.code
     local bc_len = buffer.len(bc)
     local ir = BufferWriter.new(bc_len * 2)
+    local exceptions = java_code.exceptions
 
     local pc_map: { [number]: number } = {} -- sparse map, use the ir pc above it if nil
     local jump_targets: { JumpTarget } = {}
     local stack: { SlotSize } = {}
     local stack_depth = 0
     local k = method.class._constant_pool or error("bad constant pool")
+
     --local locals = condense_locals(code)
 
     local function get_pc(old_pc: number): number
@@ -68,6 +71,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
     end
 
     local pc = 0
+    local start_pc = pc
 
     local function fetch_u8(): number
         local value = buffer.readu8(bc, pc)
@@ -96,7 +100,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
     local function pop_stack_register(check_size: SlotSize | "any"): (number, SlotSize)
         local size = stack[stack_depth]
         if check_size ~= "any" then
-            assert(size == check_size, `expected {check_size}, got {size}`)
+            assert(size == check_size, `expected {check_size}, got {size} at pc {start_pc}`)
         end
         stack_depth -= 1
         return stack_depth + 1, size
@@ -106,10 +110,20 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
         return java_code.max_stack + index + 1 --locals[index]
     end
 
+    local instructions = 0
     while pc < bc_len do
-        local start_pc = pc
+        start_pc = pc
         local start_ir_pc = ir:cursor()
         pc_map[start_pc] = start_ir_pc
+
+        for _, exception in exceptions do
+            if exception.handler_pc == start_pc then
+                table.clear(stack)
+                push_stack_register("1")
+                break
+            end
+        end
+
         local op = fetch_u8()
 
         local wide = false
@@ -219,7 +233,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
             local rlhs = pop_stack_register("1")
             local target = start_pc + fetch_i16()
             table.insert(jump_targets, emit.jump_if_cond_int(ir, cond, rlhs, rrhs, target))
-        elseif op == 0xA7 then
+        elseif op == 0xA7 then -- `goto`
             local target = start_pc + fetch_i16()
             table.insert(jump_targets, emit.jump(ir, target))
         elseif op == 0xB0 or op == 0xB1 or (op >= 0xAC and op <= 0xAF) then -- `areturn`, `return`, `ireturn` `freturn`, `lreturn`, `dreturn`
@@ -285,6 +299,8 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
         else
             error(string.format("unimplemented opcode 0x%02X", op))
         end
+
+        instructions += 1
     end
 
     local ir = ir:build()
@@ -328,8 +344,15 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
     }
 
     method.info.code = ir_code
-
-    dbg.trace(jvm, "end transpile")
+    local time_taken = (os.clock() - start) * 1000
+    dbg.trace(
+        jvm,
+        "transpiled `%s.%s` to IR in %.3fms (%i instructions)",
+        method.class.fqcn,
+        method.info.signature,
+        time_taken,
+        instructions
+    )
     return ir_code
 end
 

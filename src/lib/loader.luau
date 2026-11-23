@@ -156,10 +156,12 @@ function loader.bootstrap_core_classes(jvm: t.Jvm)
     local object_classfile = class_parser.parse(jcl_classfiles["java/lang/Object"])
     local object = JvmClass._prepare(jvm, "bootstrap", "java/lang/Object", nil, {}, 0x0001, object_classfile)
     jvm._classes.bootstrap["java/lang/Object"] = object
+    dbg.trace(jvm, "defined `java/lang/Object` directly")
 
     local class_classfile = class_parser.parse(jcl_classfiles["java/lang/Class"])
     local class = JvmClass._prepare(jvm, "bootstrap", "java/lang/Class", object, {}, 0x0001, class_classfile)
     jvm._classes.bootstrap["java/lang/Class"] = class
+    dbg.trace(jvm, "defined `java/lang/Class` directly")
 
     add_members_from_classfile(jvm, object, object_classfile, "bootstrap")
     add_members_from_classfile(jvm, class, class_classfile, "bootstrap")
@@ -256,7 +258,7 @@ function loader.define_class(
         assert_no_clinit(class)
     end
 
-    dbg.trace(jvm, "loaded class %s from loader %*", this_class_name, defining_loader)
+    dbg.trace(jvm, "defined `%s` from loader `%*`", this_class_name, defining_loader)
     return class
 end
 

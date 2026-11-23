@@ -53,9 +53,21 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
         _interned_method_handles = {},
     }, Jvm)
 
+    dbg.trace(self, "starting up")
     self._gc = GarbageCollector._new(self)
+
+    dbg.trace(self, "bootstrapping core classes")
     loader.bootstrap_core_classes(self)
 
+    dbg.trace(self, "creating main thread")
+    self.current_thread = self:create_thread(false, nil)
+
+    dbg.trace(self, "initialising system class")
+    local System = self:load_class("java/lang/System", "bootstrap")
+    local initSystemClass = System:resolve_method("initializeSystemClass", "()V")
+    System:invoke_static(initSystemClass)
+
+    dbg.trace(self, "start up complete")
     return self
 end
 
