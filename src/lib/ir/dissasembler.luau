@@ -26,11 +26,20 @@ local function dissasemble_block(writer: StringBuilder.StringBuilder, ir: buffer
                 local reg = buffer.readu16(ir, pc)
                 pc += 2
                 writer:write(`R{reg}`)
-            elseif operand.type == "register_block" then
+            elseif operand.type == "register_array" then
                 local count = buffer.readu8(ir, pc)
-                local reg = buffer.readu16(ir, pc + 1)
-                pc += 3
-                writer:write(`R{reg}x{count}`)
+                writer:write(`[`)
+                pc += 1
+                for i = 0, count - 1 do
+                    if i ~= 0 then
+                        writer:write(", ")
+                    end
+
+                    local reg = buffer.readu16(ir, pc)
+                    pc += 2
+                    writer:write("R%i", reg)
+                end
+                writer:write("]")
             elseif operand.type == "literal" then
                 local value
                 if operand.literal_type == "i32" then
@@ -68,7 +77,7 @@ local function dissasemble_block(writer: StringBuilder.StringBuilder, ir: buffer
                 else
                     writer:write("INVALID")
                 end
-            elseif operand.type == "variable" then
+            elseif operand.type == "data" then
                 local size = buffer.readu16(ir, pc)
                 pc += 2 + size
                 writer:write(`<{size}b>`)
@@ -101,7 +110,6 @@ function dissasembler.disassemble(code: t.MethodCodeIr): string
     local writer = StringBuilder.new()
 
     writer:writeln("Registers:")
-    writer:writeln("    Null:   1 (R0)")
     if code.temp_register_count > 0 then
         writer:writeln("    Temp:   %i (R1 - R%i)", code.temp_register_count, code.temp_register_count)
     else
@@ -133,7 +141,20 @@ function dissasembler.disassemble(code: t.MethodCodeIr): string
             writer:writeln("        start_pc:   0x%08X", handler.start_pc)
             writer:writeln("        end_pc:     0x%08X", handler.end_pc)
             writer:writeln("        handler_pc: 0x%08X", handler.handler_pc)
-            writer:writeln("        catch_type: %s", handler.catch_type)
+            writer:writeln("        catch_type: %s", if handler.catch_type then handler.catch_type.fqcn else "any")
+        end
+    end
+
+    if code.line_numbers and #code.line_numbers > 0 then
+        writer:writeln("\nLine Numbers:")
+        local lines = code.line_numbers
+        for i, line_number_entry in lines do
+            writer:writeln(
+                "    %i = 0x%08X =.. 0x%08X",
+                line_number_entry.line,
+                line_number_entry.start_pc,
+                line_number_entry.end_pc
+            )
         end
     end
 

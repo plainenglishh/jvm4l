@@ -49,14 +49,11 @@ export type IntoOperand =
         direction: "dst" | "src",
     }
     | {
-        type: "register_block",
-    }
-    | {
         type: "literal",
         literal_type: "i32" | "f32" | "i64" | "f64",
     }
     | {
-        type: "constant" | "jump_target" | "dispatch_type" | "variable",
+        type: "constant" | "jump_target" | "dispatch_type" | "data" | "register_array",
     }
 
 local function sizeof_intooperand(operand: IntoOperand): Size
@@ -78,7 +75,9 @@ local function sizeof_intooperand(operand: IntoOperand): Size
         return 4
     elseif operand.type == "dispatch_type" then
         return 1
-    elseif operand.type == "variable" then
+    elseif operand.type == "data" then
+        return "variable"
+    elseif operand.type == "register_array" then
         return "variable"
     else
         error("unsupported operand type" .. operand.type)
@@ -118,11 +117,11 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstruction?)
     local can_jump = false
     local operands: Operands = {}
 
-    local encountered_variable = false
+    local variable_operand: Operand?
     local offset = 1
     local base_size = 0
     for i, into_operand: IntoOperand in into_operands do
-        assert(not encountered_variable, "variable operand must be last")
+        assert(not variable_operand, "variable operand must be last")
 
         local operand = table.clone(into_operand) :: Operand
         operand.offset = offset
@@ -131,8 +130,8 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstruction?)
             can_jump = true
         end
 
-        if into_operand.type == "variable" then
-            encountered_variable = true
+        if into_operand.type == "data" or into_operand.type == "register_array" then
+            variable_operand = operand
             base_size = offset
         else
             local operand_size = sizeof_intooperand(into_operand)
@@ -143,7 +142,26 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstruction?)
         operands[i] = operand
     end
 
-    local size: Size = if encountered_variable then "variable" else offset
+    local size: Size
+    local sizeof: (buffer, number) -> number
+    if variable_operand then
+        size = "variable" :: "variable"
+
+        if variable_operand.type == "register_array" then
+            sizeof = function(ir: buffer, start_pc: number): number
+                return base_size + 1 + buffer.readu8(ir, start_pc + (variable_operand :: Operand).offset) * 2
+            end
+        elseif variable_operand.type == "data" then
+            sizeof = function(ir: buffer, start_pc: number): number
+                return base_size + 2 + buffer.readu16(ir, start_pc + (variable_operand :: Operand).offset)
+            end
+        end
+    else
+        size = offset
+        sizeof = function(_, _): number
+            return size :: number
+        end
+    end
 
     INSTRUCTIONS[op] = table.freeze({
         opcode = op,
@@ -153,15 +171,7 @@ local function DEFINE_OP(op: number, name: string, into: IntoInstruction?)
         breaks = into.breaks or false,
         can_jump = can_jump,
         fallible = into.fallible or false,
-        sizeof = function(ir: buffer, start_pc: number): number
-            assert(buffer.readu8(ir, start_pc) == op)
-            if size ~= "variable" then
-                return size
-            end
-
-            local len = buffer.readu8(ir, start_pc + base_size)
-            return base_size + len + 1
-        end,
+        sizeof = sizeof,
     })
 end
 
@@ -370,8 +380,8 @@ DEFINE_OP(0x80, "invoke", {
     operands = {
         { type = "register" :: "register", direction = "dst" },
         { type = "constant" },
-        { type = "register_block" :: "register_block" },
         { type = "dispatch_type" },
+        { type = "register_array" :: "register_array" },
     },
     breaks = true,
     fallible = true,

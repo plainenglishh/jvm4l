@@ -635,8 +635,9 @@ export type MethodCodeIr = {
 
 export type LineNumberTable = { LineNumberTableEntry }
 export type LineNumberTableEntry = {
-    start_pc: number,
     line: number,
+    start_pc: number,
+    end_pc: number,
 }
 
 export type ExceptionTable = { ExceptionHandler }

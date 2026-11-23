@@ -24,7 +24,11 @@ public class Test {
     }
 
     public static void main() throws Exception {
-        int value = loop();
-        print_int(value);
+        try {
+            int value = loop();
+            print_int(value);
+        } catch (Exception e) {
+            print_string("Something horrible has happened!");
+        }
     }
 }

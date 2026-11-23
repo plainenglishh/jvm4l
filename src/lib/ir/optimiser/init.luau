@@ -13,7 +13,7 @@ function optimiser.optimise(code: t.MethodCodeIr, level: number)
         dead_store_elimination(code.code, blocks, code.local_register_start)
     end
 
-    (code :: any).code = strip_nop(code.code, code.exceptions)
+    --(code :: any).code = strip_nop(code.code, code.exceptions) rework to use
 end
 
 return optimiser

@@ -398,20 +398,32 @@ function class_parser.get_line_number_table_attribute(
     classfile: t.Classfile,
     code: t.CfCodeAttribute
 ): t.LineNumberTable?
-    local line_numbers_info = class_parser.get_attribute_info(classfile, code.attributes, "LineNumberTable")
-    if not line_numbers_info then
+    local line_numbers: t.LineNumberTable = {}
+
+    for _, attr in code.attributes do
+        local name = class_parser.utf8_value(classfile, attr.name_index)
+        if name == "LineNumberTable" then
+            local count = read_u16be(attr.data, 0)
+            for i = 1, count do
+                local offset = ((i - 1) * 4) + 2
+                local start_pc = read_u16be(attr.data, offset)
+                local line_number = read_u16be(attr.data, offset + 2)
+                table.insert(line_numbers, { start_pc = start_pc, end_pc = 0, line = line_number })
+            end
+        end
+    end
+
+    if #line_numbers == 0 then
         return nil
     end
 
-    local line_numbers: t.LineNumberTable = {}
+    table.sort(line_numbers, function(a: t.LineNumberTableEntry, b: t.LineNumberTableEntry)
+        return a.start_pc < b.start_pc
+    end)
 
-    local line_number_count = read_u16be(line_numbers_info.data, 0)
-    for i = 1, line_number_count do
-        local offset = ((i - 1) * 4) + 2
-        local start_pc = read_u16be(line_numbers_info.data, offset)
-        local line_number = read_u16be(line_numbers_info.data, offset + 2)
-        local entry: t.LineNumberTableEntry = { start_pc = start_pc, line = line_number }
-        table.insert(line_numbers, entry)
+    for i, entry in line_numbers do
+        local next_entry = line_numbers[i + 1]
+        entry.end_pc = if next_entry then next_entry.start_pc else buffer.len(code.code)
     end
 
     return line_numbers

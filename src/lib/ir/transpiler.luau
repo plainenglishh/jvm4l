@@ -59,17 +59,12 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
     local ir = BufferWriter.new(bc_len * 2)
     local exceptions = java_code.exceptions
 
-    local pc_map: { [number]: number } = {} -- sparse map, use the ir pc above it if nil
     local jump_targets: { JumpTarget } = {}
     local stack: { SlotSize } = {}
     local stack_depth = 0
     local k = method.class._constant_pool or error("bad constant pool")
 
     --local locals = condense_locals(code)
-
-    local function get_pc(old_pc: number): number
-        return pc_map[old_pc] or error(`bad pc {old_pc}`)
-    end
 
     local pc = 0
     local start_pc = pc
@@ -114,11 +109,21 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
         return locals_start + index
     end
 
+    local pc_map: { [number]: number } = {}
+    local sorted_pcs: { number } = {}
+
+    local function record_pc(old_pc: number, ir_pc: number)
+        if pc_map[old_pc] == nil then
+            pc_map[old_pc] = ir_pc
+            table.insert(sorted_pcs, old_pc)
+        end
+    end
+
     local instructions = 0
     while pc < bc_len do
         start_pc = pc
         local start_ir_pc = ir:cursor()
-        pc_map[start_pc] = start_ir_pc
+        record_pc(start_pc, start_ir_pc)
 
         for _, exception in exceptions do
             if exception.handler_pc == start_pc then
@@ -284,15 +289,20 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
                 arg_count += 1
             end
 
+            local rargs_start = if arg_count == 0 then 0 else (stack_depth - arg_count) + 1
+            local rargs = {}
+            for i = 0, arg_count - 1 do
+                table.insert(rargs, rargs_start + i)
+            end
+
             local void = string.sub(method.info.descriptor, -1, -1) == "V"
-            local rsrc = if arg_count == 0 then 0 else (stack_depth - arg_count) + 1
             stack_depth -= arg_count
 
             if void then
-                emit.invoke(ir, 0, kmethod, arg_count, rsrc, dispatch_type)
+                emit.invoke(ir, 0, kmethod, rargs, dispatch_type)
             else
                 local rdst = push_stack_register("1")
-                emit.invoke(ir, rdst, kmethod, arg_count, rsrc, dispatch_type)
+                emit.invoke(ir, rdst, kmethod, rargs, dispatch_type)
             end
         elseif op == 0xBB then -- `new`
             local rdst = push_stack_register("1")
@@ -309,6 +319,30 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
     end
 
     local ir = ir:build()
+    record_pc(bc_len, buffer.len(ir))
+
+    local function get_pc(old_pc: number): number
+        local exact = pc_map[old_pc]
+        if exact ~= nil then
+            return exact
+        end
+
+        if old_pc < 0 or #sorted_pcs == 0 or old_pc > sorted_pcs[#sorted_pcs] then
+            error(`bad pc: {old_pc}`)
+        end
+
+        local lo, hi = 1, #sorted_pcs
+        while lo < hi do
+            local mid = (lo + hi) // 2
+            if sorted_pcs[mid] < old_pc then
+                lo = mid + 1
+            else
+                hi = mid
+            end
+        end
+
+        return pc_map[sorted_pcs[lo]]
+    end
 
     for _, jump in jump_targets do
         buffer.writeu32(ir, jump.operand_pc, get_pc(jump.java_pc))
@@ -320,6 +354,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
             start_pc = get_pc(exception.start_pc),
             end_pc = get_pc(exception.end_pc),
             handler_pc = get_pc(exception.handler_pc),
+            catch_type = exception.catch_type,
         }
     end
 
@@ -330,6 +365,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
             line_numbers[i] = {
                 line = entry.line,
                 start_pc = get_pc(entry.start_pc),
+                end_pc = get_pc(entry.end_pc),
             }
         end
     end
@@ -340,7 +376,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
         temp_register_count = java_code.max_stack,
         local_register_count = java_code.max_locals,
         local_register_start = locals_start,
-        total_registers = locals_start + java_code.max_locals,
+        total_registers = java_code.max_stack + java_code.max_locals,
         code = ir,
         exceptions = handlers,
         line_numbers = line_numbers,

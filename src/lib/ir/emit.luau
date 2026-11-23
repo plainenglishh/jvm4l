@@ -132,21 +132,16 @@ function emit.throw(ir: BufferWriter, rsrc: number)
     ir:write_u16(rsrc)
 end
 
-function emit.invoke(
-    ir: BufferWriter,
-    rdst: number,
-    kmethod: number,
-    arg_count: number,
-    rsrc: number,
-    dispatch_type: number
-)
+function emit.invoke(ir: BufferWriter, rdst: number, kmethod: number, rargs: { number }, dispatch_type: number)
     ir:write_u8(0x80)
     ir:write_u16(rdst)
     ir:write_u16(kmethod)
-    ir:write_u8(arg_count)
-    ir:write_u16(rsrc)
     assert(dispatch_type >= 0 and dispatch_type <= 3)
     ir:write_u8(dispatch_type)
+    ir:write_u8(#rargs)
+    for _, rarg in rargs do
+        ir:write_u16(rarg)
+    end
 end
 
 function emit.return_(ir: BufferWriter, rsrc: number)
