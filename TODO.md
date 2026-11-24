@@ -8,6 +8,9 @@
 - [X] introduce `reg_src_block` and `reg_dst_block` operand types
 - [ ] fix DSE and copy prop to respect `reg_x_block`
 - [ ] add loop invariant hoisting
+- [ ] get rid of `MethodCodeJava`, and resolve `MethodCode*` on first invoke
+- [ ] `JitState` enum with `candidate`, `compiled` and `failed` states.
+- [ ] improve host configuration
 
 ## Short Term Goals
 
