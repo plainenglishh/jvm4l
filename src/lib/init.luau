@@ -133,7 +133,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
                 where = "Unknown Source"
             end
 
-            table.insert(builder, 1, `    at {frame.method.class.fqcn}.{frame.method.name}({where})`)
+            table.insert(builder, 1, `    at {frame.method.debug_name}({where})`)
         end
 
         stack_trace = "\n" .. table.concat(builder, "\n")

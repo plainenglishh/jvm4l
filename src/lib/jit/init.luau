@@ -8,7 +8,7 @@ local jit = {}
 function jit.try_compile(jvm: t.Jvm, method: t.Method)
     local start_t = os.clock()
     if method.code.kind == "luau" or method.code.kind == "abstract" then
-        dbg.trace(jvm, "unable to jit compile %s.%s: not a java method", method.class.fqcn, method.name)
+        dbg.trace(jvm, "unable to jit compile `%s`: not a java method", method.debug_name)
         return
     end
 
@@ -16,13 +16,13 @@ function jit.try_compile(jvm: t.Jvm, method: t.Method)
 
     local jit_load = jvm._settings.jit_load
     if not jit_load then
-        dbg.trace(jvm, "unable to jit compile %s.%s: jit not enabled", method.class.fqcn, method.name)
+        dbg.trace(jvm, "unable to jit compile `%s`: jit not enabled", method.debug_name)
         return
     end
 
     local ok, src_or_reason = generate(method)
     if not ok then
-        dbg.trace(jvm, "unable to jit compile %s.%s: %s", method.class.fqcn, method.name, src_or_reason)
+        dbg.trace(jvm, "unable to jit compile `%s`: %s", method.debug_name, src_or_reason)
         return
     end
 
@@ -31,13 +31,13 @@ function jit.try_compile(jvm: t.Jvm, method: t.Method)
     local jit_load = assert(jvm._settings.jit_load)
     local load_ok, loaded = pcall(jit_load, src_or_reason, "=jvm4l_jit")
     if not load_ok then
-        dbg.trace(jvm, "unable to jit compile %s.%s: error in loading: %s", method.class.fqcn, method.name, loaded)
+        dbg.trace(jvm, "unable to jit compile `%s`: error in loading: %s", method.debug_name, loaded)
         return
     end
 
     code.jit = loaded() :: t.MethodStepJava
     local time_ms = (os.clock() - start_t) * 1000
-    dbg.trace(jvm, "jit compiled %s.%s in %.3fms", method.class.fqcn, method.name, time_ms)
+    dbg.trace(jvm, "jit compiled `%s` in %.3fms", method.debug_name, time_ms)
 end
 
 return jit

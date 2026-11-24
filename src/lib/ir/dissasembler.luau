@@ -172,7 +172,7 @@ end
 function dissasembler.disassemble(method: t.Method): string
     local writer = StringBuilder.new()
 
-    local header = `Disassembly of \`{method.class.fqcn}.{method.signature}\``
+    local header = `Disassembly of \`{method.debug_name}\``
     writer:writeln(header)
     writer:writeln(string.rep("=", #header) .. "\n")
 

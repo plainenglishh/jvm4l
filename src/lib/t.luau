@@ -529,6 +529,7 @@ export type _MagicValue =
 --- Field metadata.
 export type Field = {
     read class: JvmClass,
+    read debug_name: string,
     read name: string,
     read descriptor: string,
     read signature: string,
@@ -555,6 +556,7 @@ export type Field = {
 --- Method metadata.
 export type Method = {
     read class: JvmClass,
+    read debug_name: string,
     read name: string,
     read descriptor: string,
     read signature: string,

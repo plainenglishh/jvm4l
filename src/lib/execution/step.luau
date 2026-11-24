@@ -255,7 +255,7 @@ local function step_interpreter(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitRea
             local rargs_count = fetch_u8()
             local args = table.create(rargs_count) :: { t.JvmValue }
             for i = 1, rargs_count do
-                args[1] = fetch_u16()
+                args[1] = r[fetch_u16()]
             end
 
             local dispatched = dispatcher.dispatch(jvm, method, dispatch_type, f.method.class)

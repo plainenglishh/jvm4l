@@ -384,16 +384,15 @@ function transpiler.transpile(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
 
     dbg.dump_artifact(jvm, `ir-{method.name}.asm`, dissasembler.disassemble(method, handlers))
     local o_start = os.clock()
-    optimiser.optimise(ir_code, 2)
+    --optimiser.optimise(ir_code, 2)
     local o_time_taken = (os.clock() - o_start) * 1000
-    dbg.dump_artifact(jvm, `ir-{method.name}-optimised.asm`, dissasembler.disassemble(method))
+    --dbg.dump_artifact(jvm, `ir-{method.name}-optimised.asm`, dissasembler.disassemble(method))
 
     local time_taken = (os.clock() - start) * 1000
     dbg.trace(
         jvm,
-        "transpiled `%s.%s` to IR in %.3fms (%i instructions, %.3fms optimising)",
-        method.class.fqcn,
-        method.signature,
+        "transpiled `%s` to IR in %.3fms (%i instructions, %.3fms optimising)",
+        method.debug_name,
         time_taken,
         instructions,
         o_time_taken

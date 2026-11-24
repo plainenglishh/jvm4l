@@ -67,7 +67,7 @@ function frame.push_on(
         }
     end
 
-    dbg.trace(jvm, "pushed frame #%i (%s.%s) on thread #%i", #thread.stack + 1, class.fqcn, method.signature, thread.id)
+    dbg.trace(jvm, "pushed frame #%i (%s) on thread #%i", #thread.stack + 1, method.debug_name, thread.id)
 
     table.insert(thread.stack, frame :: t.StackFrame)
 end
@@ -105,7 +105,7 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
     if not return_ok then
         jvm:throw_exception(
             "java/lang/IncompatibleClassChangeError",
-            `invalid return from {class.fqcn}.{method_info.name}{method_info.descriptor}, got {type(value)}`
+            `invalid return from \`{method_info.debug_name}\`, got {type(value)}`
         )
     end
 
@@ -122,10 +122,9 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
 
     dbg.trace(
         jvm,
-        "returned from frame #%i (`%s.%s`) on thread #%i with `%*`",
+        "returned from frame #%i (`%s`) on thread #%i with `%*`",
         #thread.stack + 1,
-        class.fqcn,
-        method_info.signature,
+        method_info.debug_name,
         thread.id,
         value
     )

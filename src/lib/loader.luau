@@ -78,6 +78,7 @@ local function add_members_from_classfile(
 
         class:_add_method({
             class = class,
+            debug_name = `{class.fqcn}.{signature}`,
             name = name,
             descriptor = descriptor,
             signature = signature,
@@ -104,12 +105,14 @@ local function add_members_from_classfile(
     for _, field in classfile.fields do
         local name = class_parser.utf8_value(classfile, field.name_index)
         local descriptor = class_parser.utf8_value(classfile, field.descriptor_index)
+        local signature = `{name}:{descriptor}`
 
         class:_add_field({
             class = class,
             name = name,
+            debug_name = `{class.fqcn}.{signature}`,
             descriptor = descriptor,
-            signature = `{name}:{descriptor}`,
+            signature = signature,
             type = Lazy.new(function()
                 local value = jvm_type.resolve_field_descriptor(jvm, descriptor, defining_loader)
                 return value
