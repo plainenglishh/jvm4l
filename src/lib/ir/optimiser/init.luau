@@ -5,7 +5,7 @@ local t = require("../t")
 local analysis = require("./analysis")
 local optimiser = {}
 
-function optimiser.optimise(code: t.MethodCodeIr, level: number)
+function optimiser.optimise(code: t.MethodCodeJava, level: number)
     local blocks = analysis.basic_blocks(code.code, code.exceptions)
 
     if level > 0 then

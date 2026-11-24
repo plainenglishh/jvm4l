@@ -1,6 +1,7 @@
 --!native
 
 local dbg = require("../dbg")
+local jit = require("../jit")
 local t = require("../t")
 local util = require("../util")
 local dispatcher = require("./dispatcher")
@@ -295,12 +296,15 @@ local function step(jvm: t.Jvm)
 
     local exit_reason: t.StepExitReason, value: t.JvmValue
 
-    if f.code.kind == "luau" then
+    if f.kind == "luau" then
         exit_reason, value = step_native(jvm, f)
-    elseif f.code.jit then
-        exit_reason, value = f.code.jit(jvm, f)
-    else
-        exit_reason, value = step_interpreter(jvm, f)
+    elseif f.kind == "java" then
+        local jit_step = jit.query(jvm, method)
+        if jit_step then
+            exit_reason, value = jit_step(jvm, f)
+        else
+            exit_reason, value = step_interpreter(jvm, f)
+        end
     end
 
     if exit_reason == "break" then

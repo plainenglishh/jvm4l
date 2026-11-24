@@ -1,3 +1,4 @@
+local class_parser = require("../class_parser")
 local dbg = require("../dbg")
 local descriptors = require("../descriptors")
 local t = require("../t")
@@ -48,21 +49,15 @@ type JumpTarget = {
 
 type SlotSize = "1" | "2"
 
-function transpiler.transpile(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
-    local java_code = method.code
-    assert(java_code.kind == "java")
-
-    local start = os.clock()
-
-    local bc = java_code.code
+function transpiler.transpile(jvm: t.Jvm, method: t.JavaMethodInfo): t.MethodCodeJava
+    local bc = method.bc
     local bc_len = buffer.len(bc)
     local ir = BufferWriter.new(bc_len * 2)
-    local exceptions = java_code.exceptions
 
     local jump_targets: { JumpTarget } = {}
     local stack: { SlotSize } = {}
     local stack_depth = 0
-    local k = method.class._constant_pool or error("bad constant pool")
+    local k = method.constant_pool
 
     --local locals = condense_locals(code)
 
@@ -103,7 +98,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
     end
 
     local temp_start = 1
-    local locals_start = temp_start + java_code.max_stack
+    local locals_start = temp_start + method.max_stack
 
     local function get_local_register(index: number): number
         return locals_start + index
@@ -125,7 +120,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
         local start_ir_pc = ir:cursor()
         record_pc(start_pc, start_ir_pc)
 
-        for _, exception in exceptions do
+        for _, exception in method.exceptions do
             if exception.handler_pc == start_pc then
                 table.clear(stack)
                 push_stack_register("1")
@@ -348,7 +343,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
     end
 
     local handlers: { t.ExceptionHandler } = {}
-    for i, exception in java_code.exceptions do
+    for i, exception in method.exceptions do
         handlers[i] = {
             start_pc = get_pc(exception.start_pc),
             end_pc = get_pc(exception.end_pc),
@@ -358,9 +353,9 @@ function transpiler.transpile(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
     end
 
     local line_numbers
-    if java_code.line_numbers then
+    if method.line_numbers then
         line_numbers = {}
-        for i, entry in java_code.line_numbers do
+        for i, entry in method.line_numbers do
             line_numbers[i] = {
                 line = entry.line,
                 start_pc = get_pc(entry.start_pc),
@@ -369,35 +364,18 @@ function transpiler.transpile(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
         end
     end
 
-    local ir_code: t.MethodCodeIr = {
-        kind = "ir",
-        from_java = java_code,
-        temp_register_count = java_code.max_stack,
-        local_register_count = java_code.max_locals,
+    return table.freeze({
+        kind = "java" :: "java",
+        from_java = method,
+        temp_register_count = method.max_stack,
+        local_register_count = method.max_locals,
         local_register_start = locals_start,
-        total_registers = java_code.max_stack + java_code.max_locals,
+        total_registers = method.max_stack + method.max_locals,
         code = ir,
         exceptions = handlers,
         line_numbers = line_numbers,
-    }
-    method.code = ir_code
-
-    dbg.dump_artifact(jvm, `ir-{method.name}.asm`, dissasembler.disassemble(method, handlers))
-    local o_start = os.clock()
-    --optimiser.optimise(ir_code, 2)
-    local o_time_taken = (os.clock() - o_start) * 1000
-    --dbg.dump_artifact(jvm, `ir-{method.name}-optimised.asm`, dissasembler.disassemble(method))
-
-    local time_taken = (os.clock() - start) * 1000
-    dbg.trace(
-        jvm,
-        "transpiled `%s` to IR in %.3fms (%i instructions, %.3fms optimising)",
-        method.debug_name,
-        time_taken,
-        instructions,
-        o_time_taken
-    )
-    return ir_code
+        jit = { kind = "candidate " :: "candidate" },
+    })
 end
 
 return transpiler

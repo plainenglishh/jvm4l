@@ -114,9 +114,10 @@ OPS[0x81] = function(writer: StringBuilder, _, b: buffer, pc: number): number
 end
 
 local function generate(method: t.Method): (boolean, string)
-    local code = ir.ensure_transpiled(method.class.jvm, method)
-    local b = code.code
-    local blocks = ir.analysis.basic_blocks(b, code.exceptions)
+    local code = method.code:get()
+    assert(code.kind == "java")
+    local bc = code.code
+    local blocks = ir.analysis.basic_blocks(code.code, code.exceptions)
 
     local writer = StringBuilder.new()
 
@@ -137,11 +138,11 @@ while true do
             writer:write("else")
         end
 
-        writer:writeln(`if pc == {block.start_pc} then`)
+        writer:writeln("if pc == 0x%08X then", block.start_pc)
 
         local start_pc = block.start_pc
         while start_pc <= block.end_pc do
-            local op = buffer.readu8(b, start_pc)
+            local op = buffer.readu8(bc, start_pc)
             local info = instructions[op]
             if not info then
                 return false, string.format("unknown opcode 0x%02X @ pc 0x%08X", op, start_pc - 1)
@@ -160,7 +161,7 @@ while true do
 
             local op_builder = OPS[op]
             if op_builder then
-                start_pc = op_builder(writer, method, b, start_pc)
+                start_pc = op_builder(writer, method, bc, start_pc)
             else
                 --print(writer:build())
                 return false, string.format("no builder for opcode 0x%02X @ pc 0x%02X", op, start_pc - 1)

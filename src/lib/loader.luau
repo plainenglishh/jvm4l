@@ -1,6 +1,7 @@
 local class_parser = require("./class_parser")
 local dbg = require("./dbg")
 local JvmClass = require("./entities/JvmClass")
+local ir = require("./ir")
 local jcl_classfiles = require("./jcl_classfiles")
 local jvm_type = require("./jvm_type")
 local t = require("./t")
@@ -26,63 +27,65 @@ local function add_members_from_classfile(
         local signature = `{name}:{descriptor}`
         local native = bit32.band(method.access_flags, 0x0100) ~= 0
         local abstract = bit32.band(method.access_flags, 0x0400) ~= 0
-
-        local code: t.MethodCode
-        if native then
-            local native_method = link_native(jvm, class_name, signature)
-                or jvm:throw_exception(
-                    "java/lang/UnsatisfiedLinkError",
-                    `unable to link native method {class_name}.{signature}`
-                )
-
-            code = {
-                kind = "luau",
-                closure = native_method,
-            }
-        elseif abstract then
-            code = { kind = "abstract" }
-        else
-            local code_attribute = class_parser.get_code_attribute(classfile, method)
-                or jvm:throw_exception("java/lang/ClassFormatError")
-
-            local exceptions = {}
-
-            for _, exception_info in code_attribute.exceptions do
-                local catch_type = nil
-                if exception_info.catch_type ~= 0 then
-                    local class_info = class_parser.class(classfile, exception_info.catch_type)
-                    local class_name = class_parser.class_name(classfile, class_info)
-                    catch_type = jvm:load_class(class_name, defining_loader)
-                end
-
-                table.insert(exceptions, {
-                    start_pc = exception_info.start_pc,
-                    end_pc = exception_info.end_pc,
-                    handler_pc = exception_info.handler_pc,
-                    catch_type = catch_type,
-                })
-            end
-
-            local line_numbers = class_parser.line_numbers(classfile, code_attribute)
-
-            code = {
-                kind = "java",
-                max_stack = code_attribute.max_stack,
-                max_locals = code_attribute.max_locals,
-                code = code_attribute.code,
-                exceptions = exceptions,
-                line_numbers = line_numbers,
-                jit = nil,
-            }
-        end
+        local debug_name = `{class.fqcn}.{signature}`
 
         class:_add_method({
             class = class,
-            debug_name = `{class.fqcn}.{signature}`,
+            debug_name = debug_name,
             name = name,
             descriptor = descriptor,
             signature = signature,
-            code = code :: t.MethodCode,
+            code = Lazy.new(function(): t.MethodCode
+                local tracer = dbg.timed_trace(jvm)
+                if native then
+                    local native_method = link_native(jvm, class_name, signature)
+                        or jvm:throw_exception(
+                            "java/lang/UnsatisfiedLinkError",
+                            `unable to link native method {class_name}.{signature}`
+                        )
+
+                    tracer("linked native method `%s` in %t", debug_name)
+                    return table.freeze({
+                        kind = "luau" :: "luau",
+                        closure = native_method,
+                    })
+                elseif abstract then
+                    return table.freeze({ kind = "abstract" :: "abstract" })
+                else
+                    local code_attribute = class_parser.get_code_attribute(classfile, method)
+                        or jvm:throw_exception("java/lang/ClassFormatError")
+
+                    local exceptions = {}
+
+                    for _, exception_info in code_attribute.exceptions do
+                        local catch_type = nil
+                        if exception_info.catch_type ~= 0 then
+                            local class_info = class_parser.class(classfile, exception_info.catch_type)
+                            local class_name = class_parser.class_name(classfile, class_info)
+                            catch_type = jvm:load_class(class_name, defining_loader)
+                        end
+
+                        table.insert(exceptions, {
+                            start_pc = exception_info.start_pc,
+                            end_pc = exception_info.end_pc,
+                            handler_pc = exception_info.handler_pc,
+                            catch_type = catch_type,
+                        })
+                    end
+
+                    local line_numbers = class_parser.line_numbers(classfile, code_attribute)
+                    local code = ir.transpile(jvm, {
+                        bc = code_attribute.code,
+                        max_stack = code_attribute.max_stack,
+                        max_locals = code_attribute.max_locals,
+                        exceptions = exceptions,
+                        line_numbers = line_numbers,
+                        constant_pool = assert(class._constant_pool),
+                    })
+                    tracer("linked ir method `%s` in %t", debug_name)
+                    return code
+                end
+            end),
             type = Lazy.new(function()
                 return jvm_type.resolve_method_descriptor(jvm, descriptor, defining_loader)
             end),

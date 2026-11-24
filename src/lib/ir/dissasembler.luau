@@ -113,7 +113,7 @@ local function dissasemble_block(
     end
 end
 
-local function dissasemble_ir_code(writer: StringBuilder.StringBuilder, code: t.MethodCodeIr, cf: t.Classfile?)
+local function dissasemble_ir_code(writer: StringBuilder.StringBuilder, code: t.MethodCodeJava, cf: t.Classfile?)
     writer:writeln("Registers:")
     if code.temp_register_count > 0 then
         writer:writeln("    Temp:   %i (R1 - R%i)", code.temp_register_count, code.temp_register_count)
@@ -176,16 +176,14 @@ function dissasembler.disassemble(method: t.Method): string
     writer:writeln(header)
     writer:writeln(string.rep("=", #header) .. "\n")
 
-    local code = method.code
-    if code.kind == "ir" then
+    local code = method.code:get()
+    if code.kind == "java" then
         writer:writeln("Type: IR")
         dissasemble_ir_code(writer, code, method.class._classfile)
     elseif code.kind == "luau" then
         writer:writeln("Type: Native")
     elseif code.kind == "abstract" then
         writer:writeln("Type: Abstract")
-    elseif code.kind == "java" then
-        writer:writeln("Type: Java (awaiting transpilation)")
     end
 
     return writer:build()

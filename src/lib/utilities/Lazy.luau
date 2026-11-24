@@ -27,7 +27,11 @@ function Lazy.get<T>(self: Lazy<T>): T
 
     self._value = self._init()
     self._ready = true
+    self._init = nil :: any
+    table.freeze(self)
     return self._value :: T
 end
+
+table.freeze(Lazy)
 
 return Lazy

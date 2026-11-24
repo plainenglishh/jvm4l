@@ -241,7 +241,7 @@ export type StackFrameJava = {
     read kind: "java",
     read method: Method,
     read constants: ConstantPool,
-    read code: MethodCodeIr,
+    read code: MethodCodeJava,
     read registers: { JvmValue },
     start_pc: number,
     pc: number,
@@ -560,7 +560,7 @@ export type Method = {
     read name: string,
     read descriptor: string,
     read signature: string,
-    code: MethodCode,
+    read code: Lazy.Lazy<MethodCode>,
     read type: Lazy.Lazy<JvmMethodType>,
 
     read public: boolean,
@@ -583,7 +583,19 @@ export type Method = {
 	This is independent of the `native` and `abstract` flags, a non-native 
     synthetic method may be implemented with a luau closure, and vice versa.
 ]=]
-export type MethodCode = MethodCodeJava | MethodCodeIr | MethodCodeLuau | MethodCodeAbstract
+export type MethodCode = MethodCodeJava | MethodCodeLuau | MethodCodeAbstract
+
+export type JitState =
+    {
+        read kind: "candidate",
+    }
+    | {
+        read kind: "compiled",
+        read closure: MethodStepJava,
+    }
+    | {
+        read kind: "failed",
+    }
 
 --[=[
     A Luau (native) implementation of a method.
@@ -593,21 +605,8 @@ export type MethodCodeLuau = {
     read closure: NativeMethodStep,
 }
 
---[=[
-    A Java (bytecode) implementation of a method.
-]=]
 export type MethodCodeJava = {
     read kind: "java",
-    read max_stack: number,
-    read max_locals: number,
-    read code: buffer,
-    read exceptions: ExceptionTable,
-    read line_numbers: LineNumberTable?,
-}
-
-export type MethodCodeIr = {
-    read kind: "ir",
-    read from_java: MethodCodeJava,
     read temp_register_count: number,
     read local_register_count: number,
     read local_register_start: number,
@@ -615,7 +614,8 @@ export type MethodCodeIr = {
     read code: buffer,
     read exceptions: ExceptionTable,
     read line_numbers: LineNumberTable?,
-    jit: MethodStepJava?,
+    read from_java: JavaMethodInfo,
+    read jit: JitState,
 }
 
 export type LineNumberTable = { LineNumberTableEntry }
@@ -638,6 +638,15 @@ export type ExceptionHandler = {
 ]=]
 export type MethodCodeAbstract = {
     read kind: "abstract",
+}
+
+export type JavaMethodInfo = {
+    bc: buffer,
+    exceptions: ExceptionTable,
+    line_numbers: LineNumberTable?,
+    max_stack: number,
+    max_locals: number,
+    constant_pool: ConstantPool,
 }
 
 --------------------------------------------------------------------------------

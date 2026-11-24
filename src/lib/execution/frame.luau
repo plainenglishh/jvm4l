@@ -1,5 +1,4 @@
 local dbg = require("../dbg")
-local ir = require("../ir")
 local t = require("../t")
 local typechecker = require("../typechecker")
 
@@ -20,11 +19,9 @@ function frame.push_on(
         jvm:throw_exception("java/lang/IncompatibleClassChangeError", "typechecking failed")
     end
 
-    if method.code.kind == "java" then
-        ir.transpile(jvm, method)
-    end
+    local code = method.code:get()
 
-    if method.code.kind == "ir" then
+    if code.kind == "java" then
         local registers: { any } = table.create(255)
 
         local current_arg = 1
@@ -49,18 +46,18 @@ function frame.push_on(
             kind = "java",
             method = method,
             constants = class._constant_pool or error("class has no constant pool"),
-            code = method.code,
+            code = code,
             registers = registers,
             return_to = return_to,
             start_pc = 0,
             pc = 0,
             invocation = invocation,
         }
-    elseif method.code.kind == "luau" then
+    elseif code.kind == "luau" then
         frame = {
             kind = "luau",
             method = method,
-            code = method.code,
+            code = code,
             args = args,
             ctx = {},
             invocation = invocation,
@@ -115,7 +112,7 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
 
     stack[#stack] = nil
 
-    if parent_frame and parent_frame.code.kind == "ir" and count == 1 then
+    if parent_frame and parent_frame.code.kind == "java" and count == 1 then
         assert(frame.return_to, "expected return_to for host invoke")
         parent_frame.registers[frame.return_to] = value
     end

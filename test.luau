@@ -76,7 +76,7 @@ local ok, err = pcall(function(...)
     local Test = vm:load_class("jvm4l/test/Test")
     local test_ref = Test:resolve_method("main", "()V")
     local loop_ref = Test:resolve_method("loop", "()I")
-    jit.try_compile(vm, loop_ref)
+    jit.compile(vm, loop_ref)
 
     local start = os.clock()
     for i = 1, 5 do

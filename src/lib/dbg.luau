@@ -52,6 +52,22 @@ function dbg.trace(jvm: t.Jvm, format: string, ...: any)
     trace(message)
 end
 
+local function nop() end
+function dbg.timed_trace(jvm: t.Jvm): (format: string, ...any) -> ()
+    local trace = jvm._settings.trace
+    if not trace then
+        return nop
+    end
+
+    local start = os.clock()
+    return function(format: string, ...: any)
+        local time_taken = (os.clock() - start) * 1000
+        format = format:gsub("%%t", string.format("%.3fms", time_taken))
+        local message = string.format(format, ...)
+        trace(message)
+    end
+end
+
 function dbg.dump_artifact(jvm: t.Jvm, path: string, bytes: string | buffer)
     local dump = jvm._settings.dump
     if not dump then
