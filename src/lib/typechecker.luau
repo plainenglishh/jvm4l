@@ -68,7 +68,7 @@ end
 
     Will resolve types.
 ]=]
-function typechecker.check_field(jvm: t.Jvm, value: t.JvmValue, class: t.JvmClass, target: t.FieldInfo): boolean
+function typechecker.check_field(jvm: t.Jvm, value: t.JvmValue, class: t.JvmClass, target: t.Field): boolean
     return typechecker.check_field_type(value, target.type:get())
 end
 
@@ -77,12 +77,7 @@ end
 
     Will resolve types.
 ]=]
-function typechecker.check_method_args(
-    jvm: t.Jvm,
-    values: t.Arguments,
-    class: t.JvmClass,
-    target: t.MethodInfo
-): boolean
+function typechecker.check_method_args(jvm: t.Jvm, values: t.Arguments, class: t.JvmClass, target: t.Method): boolean
     local method_type = target.type:get()
     local static = target.static
     local expected_args = #method_type.arguments + if static then 0 else 1

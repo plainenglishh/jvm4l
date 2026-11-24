@@ -189,7 +189,6 @@ function class_parser.parse(b: buffer): t.Classfile
                 name_and_type_index = name_and_type_index,
             }
         else
-            print(tag, cursor)
             error("")
         end
     end
@@ -394,10 +393,7 @@ function class_parser.get_sourcefile_attribute(classfile: t.Classfile): string?
     return nil
 end
 
-function class_parser.get_line_number_table_attribute(
-    classfile: t.Classfile,
-    code: t.CfCodeAttribute
-): t.LineNumberTable?
+function class_parser.line_numbers(classfile: t.Classfile, code: t.CfCodeAttribute): t.LineNumberTable?
     local line_numbers: t.LineNumberTable = {}
 
     for _, attr in code.attributes do

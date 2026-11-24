@@ -74,7 +74,7 @@ native_methods["java/lang/Throwable"] = {
 
             local elem = StackTraceElement:_new_uninitialised()
             elem:set_field(declaring_class_ref, jvm:create_string(frame.method.class.name))
-            elem:set_field(method_name_ref, jvm:create_string(frame.method.info.name))
+            elem:set_field(method_name_ref, jvm:create_string(frame.method.name))
 
             trace[#trace + 1] = elem
         end

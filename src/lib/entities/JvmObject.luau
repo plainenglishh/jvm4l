@@ -6,8 +6,10 @@ local HASHCODE_MIN, HASHCODE_MAX = 0x00000000, 0xFFFFFFFF
 local next_hashcode = HASHCODE_MIN
 
 local JvmObject = {}
+
 JvmObject.__type = "JvmObject"
 JvmObject.__index = JvmObject
+JvmObject.null = false
 
 function JvmObject.__tostring(self: t.JvmObject): string
     local bits = bit32.band(self.hash_code, 0xFFFFFFFF)
@@ -50,7 +52,7 @@ function JvmObject._new(jvm: t.Jvm, class: t.JvmClass, magic: t._MagicValue?): t
     return self
 end
 
-function JvmObject._initialise(self: t.JvmObject, constructor: t.MethodHandle?, ...: t.JvmValue)
+function JvmObject._initialise(self: t.JvmObject, constructor: t.Method?, ...: t.JvmValue)
     local args = table.pack(...)
     table.insert(args, 1, self)
     args.n += 1
@@ -67,27 +69,27 @@ function JvmObject.implements(self: t.JvmObject, interface: t.JvmClass): boolean
     return self.class:implements(interface)
 end
 
-function JvmObject.get_field(self: t.JvmObject, field: t.FieldHandle): t.JvmValue
+function JvmObject.get_field(self: t.JvmObject, field: t.Field): t.JvmValue
     assert(self:instance_of(field.class)) -- IS THIS RIGHT?
     return self._field_values[field]
 end
 
-function JvmObject.set_field(self: t.JvmObject, field: t.FieldHandle, value: t.JvmValue)
+function JvmObject.set_field(self: t.JvmObject, field: t.Field, value: t.JvmValue)
     assert(self:instance_of(field.class)) -- IS THIS RIGHT?
-    if not typechecker.check_field(self.jvm, value, self.class, field.info) then
+    if not typechecker.check_field(self.jvm, value, self.class, field) then
         self.jvm:throw_exception("java/lang/IllegalArgumentException")
     end
     self._field_values[field] = value
 end
 
-function JvmObject.invoke(self: t.JvmObject, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
+function JvmObject.invoke(self: t.JvmObject, method: t.Method, ...: t.JvmValue): t.JvmValue
     local args: t.Arguments = table.pack(...)
     table.insert(args, 1, self)
     local dispatched_method = execution.dispatch(self.jvm, method, "virtual", self.class, self)
     return execution.invoke_sync(self.jvm, dispatched_method, args)
 end
 
-function JvmObject.invoke_exclusive(self: t.JvmObject, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
+function JvmObject.invoke_exclusive(self: t.JvmObject, method: t.Method, ...: t.JvmValue): t.JvmValue
     local args: t.Arguments = table.pack(...)
     table.insert(args, 1, self)
     local dispatched_method = execution.dispatch(self.jvm, method, "virtual", self.class, self)

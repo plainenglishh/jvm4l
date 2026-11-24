@@ -56,14 +56,7 @@ local function unwind_thread(jvm: t.Jvm, thread: t.Thread, target: t.Invocation,
         end
 
         stack[i] = nil
-        dbg.trace(
-            jvm,
-            "unwound frame #%i on thread #%i (%s.%s)",
-            i,
-            thread.id,
-            f.method.class.fqcn,
-            f.method.info.signature
-        )
+        dbg.trace(jvm, "unwound frame #%i on thread #%i (%s.%s)", i, thread.id, f.method.class.fqcn, f.method.signature)
 
         if f.invocation and f.invocation == target then
             return false

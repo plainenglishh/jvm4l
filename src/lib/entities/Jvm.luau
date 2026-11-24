@@ -49,8 +49,6 @@ function Jvm.new(into_settings: t.IntoJvmSettings): t.Jvm
         _exec_depth = 0,
         _gc = (nil :: any) :: t.GarbageCollector,
         _interned_strings = {},
-        _interned_field_handles = {},
-        _interned_method_handles = {},
     }, Jvm)
 
     dbg.trace(self, "starting up")
@@ -77,7 +75,7 @@ function Jvm._interrupt(self: t.Jvm)
     end
 end
 
-function Jvm.create_thread(self: t.Jvm, daemon: boolean, runnable: t.MethodInfo?): t.Thread
+function Jvm.create_thread(self: t.Jvm, daemon: boolean, runnable: t.Method?): t.Thread
     local thread: t.Thread = {
         id = self._next_thread_id,
         stack = {},
@@ -145,90 +143,6 @@ end
 
 function Jvm.define_class(self: t.Jvm, classfile: buffer, defining_loader: t.JvmClassLoader): t.JvmClass
     return loader.define_class(self, classfile, defining_loader)
-end
-
-function Jvm._get_interned_field(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.FieldHandle?
-    local by_class = self._interned_field_handles[class]
-    if not by_class then
-        return nil
-    end
-
-    local by_name = by_class[name]
-    if not by_name then
-        return nil
-    end
-
-    return by_name[descriptor]
-end
-
-function Jvm._create_interned_field(self: t.Jvm, class: t.JvmClass, field_info: t.FieldInfo): t.FieldHandle
-    local interned = self:_get_interned_field(class, field_info.name, field_info.descriptor)
-    if interned then
-        return interned
-    end
-
-    local handle: t.FieldHandle = table.freeze({
-        class = class,
-        info = field_info,
-    })
-
-    local by_class = self._interned_field_handles[class]
-    if not by_class then
-        by_class = {}
-        self._interned_field_handles[class] = by_class
-    end
-
-    local by_name = by_class[field_info.name]
-    if not by_name then
-        by_name = {}
-        by_class[field_info.name] = by_name
-    end
-
-    by_name[field_info.descriptor] = handle
-
-    return handle
-end
-
-function Jvm._get_interned_method(self: t.Jvm, class: t.JvmClass, name: string, descriptor: string): t.MethodHandle?
-    local by_class = self._interned_method_handles[class]
-    if not by_class then
-        return nil
-    end
-
-    local by_name = by_class[name]
-    if not by_name then
-        return nil
-    end
-
-    return by_name[descriptor]
-end
-
-function Jvm._create_interned_method(self: t.Jvm, class: t.JvmClass, method_info: t.MethodInfo): t.MethodHandle
-    local interned = self:_get_interned_method(class, method_info.name, method_info.descriptor)
-    if interned then
-        return interned
-    end
-
-    local handle: t.MethodHandle = table.freeze({
-        class = class,
-        info = method_info,
-    })
-
-    local by_class = self._interned_method_handles[class]
-    if not by_class then
-        by_class = {}
-        self._interned_method_handles[class] = by_class
-    end
-
-    local by_name = by_class[method_info.name]
-    if not by_name then
-        by_name = {}
-        by_class[method_info.name] = by_name
-    end
-
-    by_name[method_info.descriptor] = handle
-
-    return handle
 end
 
 function Jvm.create_string(self: t.Jvm, value: string): t.JvmObject

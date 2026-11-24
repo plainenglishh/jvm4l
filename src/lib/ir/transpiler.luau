@@ -48,8 +48,8 @@ type JumpTarget = {
 
 type SlotSize = "1" | "2"
 
-function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeIr
-    local java_code = method.info.code
+function transpiler.transpile(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
+    local java_code = method.code
     assert(java_code.kind == "java")
 
     local start = os.clock()
@@ -282,8 +282,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
 
             local kmethod = fetch_u16()
             local method = k:get(kmethod, "method")
-            print(method.info.signature)
-            local arg_words = descriptors.argument_words(method.info.descriptor)
+            local arg_words = descriptors.argument_words(method.descriptor)
             local arg_count = #arg_words
             if op ~= 0xB8 then
                 arg_count += 1
@@ -295,7 +294,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
                 table.insert(rargs, rargs_start + i)
             end
 
-            local void = string.sub(method.info.descriptor, -1, -1) == "V"
+            local void = string.sub(method.descriptor, -1, -1) == "V"
             stack_depth -= arg_count
 
             if void then
@@ -381,20 +380,20 @@ function transpiler.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeI
         exceptions = handlers,
         line_numbers = line_numbers,
     }
+    method.code = ir_code
 
-    dbg.dump_artifact(jvm, `ir-{method.info.name}.asm`, dissasembler.disassemble(ir_code, handlers))
+    dbg.dump_artifact(jvm, `ir-{method.name}.asm`, dissasembler.disassemble(method, handlers))
     local o_start = os.clock()
     optimiser.optimise(ir_code, 2)
     local o_time_taken = (os.clock() - o_start) * 1000
-    dbg.dump_artifact(jvm, `ir-{method.info.name}-optimised.asm`, dissasembler.disassemble(ir_code))
+    dbg.dump_artifact(jvm, `ir-{method.name}-optimised.asm`, dissasembler.disassemble(method))
 
-    method.info.code = ir_code
     local time_taken = (os.clock() - start) * 1000
     dbg.trace(
         jvm,
         "transpiled `%s.%s` to IR in %.3fms (%i instructions, %.3fms optimising)",
         method.class.fqcn,
-        method.info.signature,
+        method.signature,
         time_taken,
         instructions,
         o_time_taken

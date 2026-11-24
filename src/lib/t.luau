@@ -114,8 +114,6 @@ export type Jvm = setmetatable<
 
         _gc: GarbageCollector,
         read _interned_strings: { [string]: JvmObject },
-        read _interned_method_handles: { [JvmClass]: { [string]: { [string]: MethodHandle } } }, -- class, name, descriptor
-        read _interned_field_handles: { [JvmClass]: { [string]: { [string]: FieldHandle } } }, -- class, name, descriptor
     },
     {
         __type: "Jvm",
@@ -127,17 +125,12 @@ export type Jvm = setmetatable<
 
         new: (settings: IntoJvmSettings) -> Jvm,
 
-        create_thread: (self: Jvm, daemon: boolean, runnable: MethodInfo?) -> Thread,
+        create_thread: (self: Jvm, daemon: boolean, runnable: Method?) -> Thread,
         _interrupt: (self: Jvm) -> (),
 
         get_loader: (self: Jvm) -> JvmClassLoader,
         load_class: (self: Jvm, name: string, initiating_loader: JvmClassLoader?) -> JvmClass,
         define_class: (self: Jvm, classfile: buffer, defining_loader: JvmClassLoader) -> JvmClass,
-
-        _get_interned_field: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> FieldHandle?,
-        _create_interned_field: (self: Jvm, class: JvmClass, field_info: FieldInfo) -> FieldHandle,
-        _get_interned_method: (self: Jvm, class: JvmClass, name: string, descriptor: string) -> MethodHandle?,
-        _create_interned_method: (self: Jvm, class: JvmClass, method_info: MethodInfo) -> MethodHandle,
 
         create_string: (self: Jvm, value: string) -> JvmObject,
         create_array: (self: Jvm, element: JvmFieldType, size_or_values: number | { JvmValue }) -> JvmObject,
@@ -246,7 +239,7 @@ export type StackFrame = StackFrameJava | StackFrameLuau
 
 export type StackFrameJava = {
     read kind: "java",
-    read method: MethodHandle,
+    read method: Method,
     read constants: ConstantPool,
     read code: MethodCodeIr,
     read registers: { JvmValue },
@@ -275,7 +268,7 @@ export type NativeContext = { [any]: any }
 
 export type StackFrameLuau = {
     read kind: "luau",
-    read method: MethodHandle,
+    read method: Method,
     read code: MethodCodeLuau,
     read args: Arguments,
     read ctx: NativeContext,
@@ -327,14 +320,14 @@ export type JvmClass = setmetatable<
 
         read source_file: string?,
 
-        read _methods: { MethodInfo },
-        read _fields: { FieldInfo },
+        read _methods: { Method },
+        read _fields: { Field },
         read _classfile: Classfile?,
         _constant_pool: ConstantPool?,
         read _monitor: Monitor,
         _mirror: JvmObject,
         _state: JvmClassState,
-        read _static_field_values: { [FieldHandle]: JvmValue },
+        read _static_field_values: { [Field]: JvmValue },
     },
     {
         __type: "JvmClass",
@@ -356,8 +349,8 @@ export type JvmClass = setmetatable<
             source_file: string?
         ) -> JvmClass,
 
-        _add_method: (self: JvmClass, method: MethodInfo) -> (),
-        _add_field: (self: JvmClass, field: FieldInfo) -> (),
+        _add_method: (self: JvmClass, method: Method) -> (),
+        _add_field: (self: JvmClass, field: Field) -> (),
 
         --[=[
 			Calls the class initialiser on this class if it hasn't been called
@@ -382,22 +375,22 @@ export type JvmClass = setmetatable<
 			Creates a new Object from this class, dynamically selecting a
 			constructor from given values, if one exists.
 		]=]
-        new: (self: JvmClass, constructor: MethodHandle?, ...JvmValue) -> JvmObject,
+        new: (self: JvmClass, constructor: Method?, ...JvmValue) -> JvmObject,
 
         inherits_from: (self: JvmClass, other: JvmClass) -> boolean,
         implements: (self: JvmClass, interface: JvmClass) -> boolean,
-        get_static_field: (self: JvmClass, field: FieldHandle) -> JvmValue,
-        set_static_field: (self: JvmClass, field: FieldHandle, value: JvmValue) -> (),
+        get_static_field: (self: JvmClass, field: Field) -> JvmValue,
+        set_static_field: (self: JvmClass, field: Field, value: JvmValue) -> (),
 
-        resolve_method: (self: JvmClass, name: string, descriptor: string) -> MethodHandle,
-        resolve_field: (self: JvmClass, name: string, descriptor: string) -> FieldHandle,
+        resolve_method: (self: JvmClass, name: string, descriptor: string) -> Method,
+        resolve_field: (self: JvmClass, name: string, descriptor: string) -> Field,
 
-        invoke_static: (self: JvmClass, method: MethodHandle, ...JvmValue) -> JvmValue,
-        invoke_static_exclusive: (self: JvmClass, method: MethodHandle, ...JvmValue) -> JvmValue,
+        invoke_static: (self: JvmClass, method: Method, ...JvmValue) -> JvmValue,
+        invoke_static_exclusive: (self: JvmClass, method: Method, ...JvmValue) -> JvmValue,
 
         -- Reflection
 
-        get_method: (self: JvmClass, name: string, descriptor: string) -> MethodInfo?,
+        get_method: (self: JvmClass, name: string, descriptor: string) -> Method?,
     }
 >
 
@@ -416,8 +409,8 @@ export type ConstantValueType =
 
 export type ConstantValue =
     | { type: "class", value: JvmClass }
-    | { type: "field", value: FieldHandle }
-    | { type: "method" | "interface_method", value: MethodHandle }
+    | { type: "field", value: Field }
+    | { type: "method" | "interface_method", value: Method }
     | { type: "string", value: JvmObject }
     | { type: "int" | "float" | "double", value: number }
     | { type: "long", value: integer }
@@ -436,8 +429,8 @@ export type ConstantPool = setmetatable<
         read _resolve: (self: ConstantPool, idx: number) -> ConstantValue,
         read is: (self: ConstantPool, idx: number, type: ConstantValueType) -> boolean,
         read get: & ((self: ConstantPool, idx: number, type: "class") -> JvmClass)
-            & ((self: ConstantPool, idx: number, type: "field") -> FieldHandle)
-            & ((self: ConstantPool, idx: number, type: "method" | "interface_method") -> MethodHandle)
+            & ((self: ConstantPool, idx: number, type: "field") -> Field)
+            & ((self: ConstantPool, idx: number, type: "method" | "interface_method") -> Method)
             & ((self: ConstantPool, idx: number, type: "string") -> JvmObject)
             & ((self: ConstantPool, idx: number, type: "int" | "float" | "double") -> number)
             & ((self: ConstantPool, idx: number, type: "long") -> integer),
@@ -462,7 +455,7 @@ export type JvmObject = setmetatable<
         read _monitor: Monitor,
         _magic: _MagicValue?,
         --- The actual field values. An absent value means it's uninitialised.
-        read _field_values: { [FieldHandle]: JvmValue },
+        read _field_values: { [Field]: JvmValue },
     },
     {
         __type: "JvmObject",
@@ -482,15 +475,15 @@ export type JvmObject = setmetatable<
         --[=[
 
 		]=]
-        _initialise: (self: JvmObject, constructor: MethodHandle?, ...JvmValue) -> (),
+        _initialise: (self: JvmObject, constructor: Method?, ...JvmValue) -> (),
 
         instance_of: (self: JvmObject, class: JvmClass) -> boolean,
         implements: (self: JvmObject, interface: JvmClass) -> boolean,
 
-        get_field: (self: JvmObject, field: FieldHandle) -> JvmValue,
-        set_field: (self: JvmObject, field: FieldHandle, value: JvmValue) -> (),
-        invoke: (self: JvmObject, method: MethodHandle, ...JvmValue) -> JvmValue,
-        invoke_exclusive: (self: JvmObject, method: MethodHandle, ...JvmValue) -> JvmValue,
+        get_field: (self: JvmObject, field: Field) -> JvmValue,
+        set_field: (self: JvmObject, field: Field, value: JvmValue) -> (),
+        invoke: (self: JvmObject, method: Method, ...JvmValue) -> JvmValue,
+        invoke_exclusive: (self: JvmObject, method: Method, ...JvmValue) -> JvmValue,
 
         inner_string: (self: JvmObject) -> string,
         inner_thread: (self: JvmObject) -> Thread,
@@ -534,7 +527,8 @@ export type _MagicValue =
 --------------------------------------------------------------------------------
 
 --- Field metadata.
-export type FieldInfo = {
+export type Field = {
+    read class: JvmClass,
     read name: string,
     read descriptor: string,
     read signature: string,
@@ -551,12 +545,6 @@ export type FieldInfo = {
     read enum: boolean,
 }
 
---- Resolved field handle.
-export type FieldHandle = {
-    read class: JvmClass,
-    read info: FieldInfo,
-}
-
 --------------------------------------------------------------------------------
 -- Methods
 --
@@ -565,7 +553,8 @@ export type FieldHandle = {
 --------------------------------------------------------------------------------
 
 --- Method metadata.
-export type MethodInfo = {
+export type Method = {
+    read class: JvmClass,
     read name: string,
     read descriptor: string,
     read signature: string,
@@ -584,12 +573,6 @@ export type MethodInfo = {
     read abstract: boolean,
     read strictfp: boolean,
     read synthetic: boolean,
-}
-
---- Resolved method handle.
-export type MethodHandle = {
-    read class: JvmClass,
-    read info: MethodInfo,
 }
 
 --[=[

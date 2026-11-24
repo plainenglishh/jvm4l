@@ -63,7 +63,7 @@ local function add_members_from_classfile(
                 })
             end
 
-            local line_numbers = class_parser.get_line_number_table_attribute(classfile, code_attribute)
+            local line_numbers = class_parser.line_numbers(classfile, code_attribute)
 
             code = {
                 kind = "java",
@@ -77,6 +77,7 @@ local function add_members_from_classfile(
         end
 
         class:_add_method({
+            class = class,
             name = name,
             descriptor = descriptor,
             signature = signature,
@@ -105,6 +106,7 @@ local function add_members_from_classfile(
         local descriptor = class_parser.utf8_value(classfile, field.descriptor_index)
 
         class:_add_field({
+            class = class,
             name = name,
             descriptor = descriptor,
             signature = `{name}:{descriptor}`,
@@ -126,7 +128,7 @@ local function add_members_from_classfile(
     end
 end
 
-local ARRAY_METHODS: { t.MethodInfo } = {}
+local ARRAY_METHODS: { t.Method } = {}
 
 local function register_class(self: t.Jvm, defining_loader: t.JvmClassLoader, class: t.JvmClass)
     if not self._classes[defining_loader] then

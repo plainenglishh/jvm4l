@@ -16,25 +16,18 @@
 
 --[[
     Instruction Format:
-        `<opcode:u8>{<operand:Operand>}`
+        opcode          u8
+        operands        operand[N]
 
     Operand Formats:
-        register = `<reg:u16>`
-        register_array = `<count:u8>{<reg:u16>}`
-        literal:
-            i32 = `<value:i32>`
-            f32 = `<value:f32>`
-            i64 = `<value:i64>`
-            f64 = `<value:f64>`
-        constant` = `<const:u16>`
-        jump_target = `<target:u32>`
-        dispatch_type = `<type:u8>` where:
-            0 = VIRTUAL
-            1 = SPECIAL
-            2 = STATIC
-            _ = INVALID
-        variable `<len:u16>{<data:u8>}`
-    ]]
+        register        reg: u16
+        register_array  count: u8, regs: u16[count]
+        constant        index: u16
+        jump_target     offset: u32
+        data            len: u16, bytes: u8[len]
+        literal         value: i32 | f32 | i64 | f64
+        dispatch_type   kind: u8 (0 = VIRTUAL, 1 = SPECIAL, 2 = STATIC, _ = INVALID)
+]]
 
 --- An Instruction or Operand size.
 export type Size = number | "variable"
@@ -45,14 +38,17 @@ export type Operand = IntoOperand & {
 
 export type IntoOperand =
     {
+        name: string,
         type: "register",
         direction: "dst" | "src",
     }
     | {
+        name: string,
         type: "literal",
         literal_type: "i32" | "f32" | "i64" | "f64",
     }
     | {
+        name: string,
         type: "constant" | "jump_target" | "dispatch_type" | "data" | "register_array",
     }
 
@@ -181,8 +177,8 @@ DEFINE_OP(0x00, "nop")
 
 DEFINE_OP(0x01, "move", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "register" :: "register", direction = "src" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "src", type = "register" :: "register", direction = "src" },
     },
 })
 
@@ -190,42 +186,42 @@ DEFINE_OP(0x01, "move", {
 
 DEFINE_OP(0x10, "load_literal/null", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
     },
 })
 
 DEFINE_OP(0x11, "load_literal/int", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "literal" :: "literal", literal_type = "i32" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "value", type = "literal" :: "literal", literal_type = "i32" },
     },
 })
 
 DEFINE_OP(0x12, "load_literal/float", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "literal" :: "literal", literal_type = "f32" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "value", type = "literal" :: "literal", literal_type = "f32" },
     },
 })
 
 DEFINE_OP(0x13, "load_literal/long", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "literal" :: "literal", literal_type = "i64" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "value", type = "literal" :: "literal", literal_type = "i64" },
     },
 })
 
 DEFINE_OP(0x14, "load_literal/double", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "literal" :: "literal", literal_type = "f64" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "value", type = "literal" :: "literal", literal_type = "f64" },
     },
 })
 
 DEFINE_OP(0x15, "load_const", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "constant" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "const", type = "constant" },
     },
     fallible = true,
 })
@@ -234,26 +230,26 @@ DEFINE_OP(0x15, "load_const", {
 
 DEFINE_OP(0x20, "add/int", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "register" :: "register", direction = "src" }, --rhs
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "lhs", type = "register" :: "register", direction = "src" },
+        { name = "rhs", type = "register" :: "register", direction = "src" },
     },
 })
 
 DEFINE_OP(0x21, "sub/int", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "register" :: "register", direction = "src" }, --rhs
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "lhs", type = "register" :: "register", direction = "src" },
+        { name = "rhs", type = "register" :: "register", direction = "src" },
     },
 })
 
 -- fast path for iinc
 DEFINE_OP(0x22, "add_literal/int", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "literal" :: "literal", literal_type = "i32" }, --rhs
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "lhs", type = "register" :: "register", direction = "src" },
+        { name = "rhs", type = "literal" :: "literal", literal_type = "i32" },
     },
 })
 
@@ -261,63 +257,63 @@ DEFINE_OP(0x22, "add_literal/int", {
 
 DEFINE_OP(0x40, "jump_if_eq/int", {
     operands = {
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "register" :: "register", direction = "src" }, --rhs
-        { type = "jump_target" },
+        { name = "lhs", type = "register" :: "register", direction = "src" },
+        { name = "rhs", type = "register" :: "register", direction = "src" },
+        { name = "target", type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x41, "jump_if_ne/int", {
     operands = {
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "register" :: "register", direction = "src" }, --rhs
-        { type = "jump_target" },
+        { name = "lhs", type = "register" :: "register", direction = "src" }, --lhs
+        { name = "rhs", type = "register" :: "register", direction = "src" }, --rhs
+        { name = "target", type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x42, "jump_if_lt/int", {
     operands = {
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "register" :: "register", direction = "src" }, --rhs
-        { type = "jump_target" },
+        { name = "lhs", type = "register" :: "register", direction = "src" }, --lhs
+        { name = "rhs", type = "register" :: "register", direction = "src" }, --rhs
+        { name = "target", type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x43, "jump_if_ge/int", {
     operands = {
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "register" :: "register", direction = "src" }, --rhs
-        { type = "jump_target" },
+        { name = "lhs", type = "register" :: "register", direction = "src" }, --lhs
+        { name = "rhs", type = "register" :: "register", direction = "src" }, --rhs
+        { name = "target", type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x44, "jump_if_gt/int", {
     operands = {
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "register" :: "register", direction = "src" }, --rhs
-        { type = "jump_target" },
+        { name = "lhs", type = "register" :: "register", direction = "src" }, --lhs
+        { name = "rhs", type = "register" :: "register", direction = "src" }, --rhs
+        { name = "target", type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x45, "jump_if_le/int", {
     operands = {
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "register" :: "register", direction = "src" }, --rhs
-        { type = "jump_target" },
+        { name = "lhs", type = "register" :: "register", direction = "src" }, --lhs
+        { name = "rhs", type = "register" :: "register", direction = "src" }, --rhs
+        { name = "target", type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x46, "jump_if_eq/ref", {
     operands = {
-        { type = "register" :: "register", direction = "src" }, --lhs
-        { type = "register" :: "register", direction = "src" }, --rhs
-        { type = "jump_target" },
+        { name = "lhs", type = "register" :: "register", direction = "src" }, --lhs
+        { name = "rhs", type = "register" :: "register", direction = "src" }, --rhs
+        { name = "target", type = "jump_target" },
     },
 })
 
 DEFINE_OP(0x50, "jump", {
     operands = {
-        { type = "jump_target" },
+        { name = "target", type = "jump_target" },
     },
 })
 
@@ -325,34 +321,34 @@ DEFINE_OP(0x50, "jump", {
 
 DEFINE_OP(0x60, "get_field", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "register" :: "register", direction = "src" }, -- object
-        { type = "constant" }, -- field
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "object", type = "register" :: "register", direction = "src" },
+        { name = "field", type = "constant" },
     },
     fallible = true,
 })
 
 DEFINE_OP(0x61, "set_field", {
     operands = {
-        { type = "register" :: "register", direction = "dst" }, -- object
-        { type = "register" :: "register", direction = "src" }, -- value
-        { type = "constant" }, -- field
+        { name = "object", type = "register" :: "register", direction = "dst" },
+        { name = "src", type = "register" :: "register", direction = "src" },
+        { name = "field", type = "constant" },
     },
     fallible = true,
 })
 
 DEFINE_OP(0x62, "get_static", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "constant" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "class", type = "constant" },
     },
     fallible = true,
 })
 
 DEFINE_OP(0x63, "set_static", {
     operands = {
-        { type = "register" :: "register", direction = "src" },
-        { type = "constant" },
+        { name = "src", type = "register" :: "register", direction = "src" },
+        { name = "class", type = "constant" },
     },
     fallible = true,
 })
@@ -361,15 +357,15 @@ DEFINE_OP(0x63, "set_static", {
 
 DEFINE_OP(0x70, "new", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "constant" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "class", type = "constant" },
     },
     fallible = true,
 })
 
 DEFINE_OP(0x71, "throw", {
     operands = {
-        { type = "register" :: "register", direction = "src" },
+        { name = "src", type = "register" :: "register", direction = "src" },
     },
     fallible = true,
 })
@@ -378,10 +374,10 @@ DEFINE_OP(0x71, "throw", {
 
 DEFINE_OP(0x80, "invoke", {
     operands = {
-        { type = "register" :: "register", direction = "dst" },
-        { type = "constant" },
-        { type = "dispatch_type" },
-        { type = "register_array" :: "register_array" },
+        { name = "dst", type = "register" :: "register", direction = "dst" },
+        { name = "method", type = "constant" },
+        { name = "type", type = "dispatch_type" },
+        { name = "args", type = "register_array" :: "register_array" },
     },
     breaks = true,
     fallible = true,
@@ -389,7 +385,7 @@ DEFINE_OP(0x80, "invoke", {
 
 DEFINE_OP(0x81, "return", {
     operands = {
-        { type = "register" :: "register", direction = "src" },
+        { name = "src", type = "register" :: "register", direction = "src" },
     },
     breaks = true,
 })

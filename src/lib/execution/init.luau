@@ -6,13 +6,13 @@ local frames = require("@self/frame")
 local t = require("./t")
 
 export type DispatchType = dispatcher.DispatchType
-export type DispatchedMethodHandle = dispatcher.DispatchedMethodHandle
+export type DispatchedMethodHandle = dispatcher.DispatchedMethod
 
 local execution = {}
 
 function execution.dispatch(
     jvm: t.Jvm,
-    method: t.MethodHandle,
+    method: t.Method,
     type: DispatchType,
     executing_class: t.JvmClass,
     executing_object: t.JvmObject?

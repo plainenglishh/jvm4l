@@ -1,10 +1,16 @@
+local class_parser = require("../class_parser")
 local t = require("../t")
 local StringBuilder = require("../utilities/StringBuilder")
 local analysis = require("./analysis")
 local instructions = require("./instructions")
 local dissasembler = {}
 
-local function dissasemble_block(writer: StringBuilder.StringBuilder, ir: buffer, block: analysis.BasicBlock)
+local function dissasemble_block(
+    writer: StringBuilder.StringBuilder,
+    ir: buffer,
+    block: analysis.BasicBlock,
+    encountered_constants: { [number]: boolean }
+)
     local pc = block.start_pc
 
     while pc < block.end_pc do
@@ -58,6 +64,7 @@ local function dissasemble_block(writer: StringBuilder.StringBuilder, ir: buffer
                 writer:write(tostring(value))
             elseif operand.type == "constant" then
                 local kidx = buffer.readu16(ir, pc)
+                encountered_constants[kidx] = true
                 pc += 2
                 writer:write(`K{kidx}`)
             elseif operand.type == "jump_target" then
@@ -106,9 +113,7 @@ local function dissasemble_block(writer: StringBuilder.StringBuilder, ir: buffer
     end
 end
 
-function dissasembler.disassemble(code: t.MethodCodeIr): string
-    local writer = StringBuilder.new()
-
+local function dissasemble_ir_code(writer: StringBuilder.StringBuilder, code: t.MethodCodeIr, cf: t.Classfile?)
     writer:writeln("Registers:")
     if code.temp_register_count > 0 then
         writer:writeln("    Temp:   %i (R1 - R%i)", code.temp_register_count, code.temp_register_count)
@@ -127,35 +132,60 @@ function dissasembler.disassemble(code: t.MethodCodeIr): string
     end
     writer:writeln("    Total:  %i", code.total_registers)
 
-    writer:writeln("\nCode:")
+    local encountered_constants = {}
+    writer:writeln("Instructions:")
     local blocks = analysis.basic_blocks(code.code, code.exceptions)
     for _, block in blocks do
         writer:write("  > ", block.id, block.start_pc)
-        dissasemble_block(writer, code.code, block)
+        dissasemble_block(writer, code.code, block, encountered_constants)
     end
 
     if #code.exceptions > 0 then
-        writer:writeln("\nExceptions:")
+        writer:writeln("Exceptions:")
         for i, handler in code.exceptions do
-            writer:writeln("    Exception %i:", i)
-            writer:writeln("        start_pc:   0x%08X", handler.start_pc)
-            writer:writeln("        end_pc:     0x%08X", handler.end_pc)
-            writer:writeln("        handler_pc: 0x%08X", handler.handler_pc)
-            writer:writeln("        catch_type: %s", if handler.catch_type then handler.catch_type.fqcn else "any")
+            writer:writeln(
+                "    %i = 0x%08X..0x%08X -> 0x%08X (%s)",
+                i,
+                handler.start_pc,
+                handler.end_pc,
+                handler.handler_pc,
+                if handler.catch_type then handler.catch_type.fqcn else "any"
+            )
         end
     end
 
     if code.line_numbers and #code.line_numbers > 0 then
-        writer:writeln("\nLine Numbers:")
+        writer:writeln("Line Numbers:")
         local lines = code.line_numbers
         for i, line_number_entry in lines do
             writer:writeln(
-                "    %i = 0x%08X =.. 0x%08X",
-                line_number_entry.line,
+                "    %i = 0x%08X..0x%08X = %i",
+                i,
                 line_number_entry.start_pc,
-                line_number_entry.end_pc
+                line_number_entry.end_pc,
+                line_number_entry.line
             )
         end
+    end
+end
+
+function dissasembler.disassemble(method: t.Method): string
+    local writer = StringBuilder.new()
+
+    local header = `Disassembly of \`{method.class.fqcn}.{method.signature}\``
+    writer:writeln(header)
+    writer:writeln(string.rep("=", #header) .. "\n")
+
+    local code = method.code
+    if code.kind == "ir" then
+        writer:writeln("Type: IR")
+        dissasemble_ir_code(writer, code, method.class._classfile)
+    elseif code.kind == "luau" then
+        writer:writeln("Type: Native")
+    elseif code.kind == "abstract" then
+        writer:writeln("Type: Abstract")
+    elseif code.kind == "java" then
+        writer:writeln("Type: Java (awaiting transpilation)")
     end
 
     return writer:build()

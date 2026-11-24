@@ -52,12 +52,7 @@ function emit.move_register(writer: StringBuilder, rdst: number, rsrc: number)
     writer:writeln("%s = %s", rexpr(rdst), rexpr(rsrc))
 end
 
-type OpImpl = (
-    writer: StringBuilder.StringBuilder,
-    method: t.MethodHandle,
-    b: buffer,
-    pc: number
-) -> number
+type OpImpl = (writer: StringBuilder.StringBuilder, method: t.Method, b: buffer, pc: number) -> number
 
 local OPS: { [number]: OpImpl } = {}
 
@@ -118,7 +113,7 @@ OPS[0x81] = function(writer: StringBuilder, _, b: buffer, pc: number): number
     return pc + 3
 end
 
-local function generate(method: t.MethodHandle): (boolean, string)
+local function generate(method: t.Method): (boolean, string)
     local code = ir.ensure_transpiled(method.class.jvm, method)
     local b = code.code
     local blocks = ir.analysis.basic_blocks(b, code.exceptions)
@@ -167,7 +162,7 @@ while true do
             if op_builder then
                 start_pc = op_builder(writer, method, b, start_pc)
             else
-                print(writer:build())
+                --print(writer:build())
                 return false, string.format("no builder for opcode 0x%02X @ pc 0x%02X", op, start_pc - 1)
             end
             writer:writeln("end\n")

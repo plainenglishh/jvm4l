@@ -46,10 +46,8 @@ export type ConstantValueType = t.ConstantValueType
 export type ConstantValue = t.ConstantValue
 export type ConstantPool = t.ConstantPool
 export type JvmObject = t.JvmObject
-export type FieldInfo = t.FieldInfo
-export type FieldHandle = t.FieldHandle
-export type MethodInfo = t.MethodInfo
-export type MethodHandle = t.MethodHandle
+export type Field = t.Field
+export type Method = t.Method
 export type MethodCode = t.MethodCode
 export type MethodCodeLuau = t.MethodCodeLuau
 export type MethodCodeJava = t.MethodCodeJava
@@ -113,7 +111,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
 
         for _, frame in exception._magic.stack do
             local where: string
-            if frame.method.info.native then
+            if frame.method.native then
                 where = "Native Method"
             elseif frame.method.class.source_file then
                 where = frame.method.class.source_file
@@ -135,7 +133,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
                 where = "Unknown Source"
             end
 
-            table.insert(builder, 1, `    at {frame.method.class.fqcn}.{frame.method.info.name}({where})`)
+            table.insert(builder, 1, `    at {frame.method.class.fqcn}.{frame.method.name}({where})`)
         end
 
         stack_trace = "\n" .. table.concat(builder, "\n")

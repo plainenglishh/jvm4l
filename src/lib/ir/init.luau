@@ -2,13 +2,13 @@ local transpiler = require("@self/transpiler")
 local t = require("./t")
 local ir = {}
 
-function ir.transpile(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeIr
+function ir.transpile(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
     return transpiler.transpile(jvm, method)
 end
 
-function ir.ensure_transpiled(jvm: t.Jvm, method: t.MethodHandle): t.MethodCodeIr
-    if method.info.code.kind == "ir" then
-        return method.info.code
+function ir.ensure_transpiled(jvm: t.Jvm, method: t.Method): t.MethodCodeIr
+    if method.code.kind == "ir" then
+        return method.code
     end
 
     return ir.transpile(jvm, method)

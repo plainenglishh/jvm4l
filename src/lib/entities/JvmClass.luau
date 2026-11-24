@@ -72,11 +72,11 @@ function JvmClass._prepare(
     return self
 end
 
-function JvmClass._add_method(self: t.JvmClass, method: t.MethodInfo)
+function JvmClass._add_method(self: t.JvmClass, method: t.Method)
     table.insert(self._methods, method)
 end
 
-function JvmClass._add_field(self: t.JvmClass, field: t.FieldInfo)
+function JvmClass._add_field(self: t.JvmClass, field: t.Field)
     table.insert(self._fields, field)
 end
 
@@ -119,7 +119,7 @@ function JvmClass._new_uninitialised(self: t.JvmClass, magic: t._MagicValue?): t
     return JvmObject._new(self.jvm, self, magic)
 end
 
-function JvmClass.new(self: t.JvmClass, constructor: t.MethodHandle?, ...: t.JvmValue): t.JvmObject
+function JvmClass.new(self: t.JvmClass, constructor: t.Method?, ...: t.JvmValue): t.JvmObject
     local o = self:_new_uninitialised()
     o:_initialise(constructor, ...)
     return o
@@ -153,33 +153,29 @@ function JvmClass.implements(self: t.JvmClass, interface: t.JvmClass): boolean
     return false
 end
 
-function JvmClass.get_static_field(self: t.JvmClass, field: t.FieldHandle): t.JvmValue
+function JvmClass.get_static_field(self: t.JvmClass, field: t.Field): t.JvmValue
     self:_ensure_initialised()
     assert(self == field.class or self:inherits_from(field.class))
     return field.class._static_field_values[field]
 end
 
-function JvmClass.set_static_field(self: t.JvmClass, field: t.FieldHandle, value: t.JvmValue)
+function JvmClass.set_static_field(self: t.JvmClass, field: t.Field, value: t.JvmValue)
     self:_ensure_initialised()
     assert(self == field.class or self:inherits_from(field.class))
     field.class._static_field_values[field] = value
 end
 
-function JvmClass.resolve_field(self: t.JvmClass, name: string, descriptor: string): t.FieldHandle
+function JvmClass.resolve_field(self: t.JvmClass, name: string, descriptor: string): t.Field
     local jvm = self.jvm
-    local interned_field = jvm:_get_interned_field(self, name, descriptor)
-    if interned_field then
-        return interned_field
-    end
 
     for _, field in self._fields do
         if field.name == name and field.descriptor == descriptor then
             -- CHECK ACCESS
-            return jvm:_create_interned_field(self, field)
+            return field
         end
     end
 
-    local function deep_search_field(class_or_interface: t.JvmClass): (t.JvmClass?, t.FieldInfo?)
+    local function deep_search_field(class_or_interface: t.JvmClass): (t.JvmClass?, t.Field?)
         for _, field in class_or_interface._fields do
             if field.name == name and field.descriptor == descriptor then
                 return class_or_interface, field
@@ -200,7 +196,7 @@ function JvmClass.resolve_field(self: t.JvmClass, name: string, descriptor: stri
         local found_class, found_field = deep_search_field(interface)
         if found_class and found_field then
             -- CHECK ACCESS
-            return jvm:_create_interned_field(found_class, found_field)
+            return found_field
         end
     end
 
@@ -209,7 +205,7 @@ function JvmClass.resolve_field(self: t.JvmClass, name: string, descriptor: stri
         for _, field in current._fields do
             if field.name == name and field.descriptor == descriptor then
                 -- CHECK ACCESS
-                return jvm:_create_interned_field(current, field)
+                return field
             end
         end
         current = current.super
@@ -218,12 +214,8 @@ function JvmClass.resolve_field(self: t.JvmClass, name: string, descriptor: stri
     return jvm:throw_exception("java/lang/NoSuchFieldError", `{self.fqcn} has no field {name}:{descriptor}`)
 end
 
-function JvmClass.resolve_method(self: t.JvmClass, name: string, descriptor: string): t.MethodHandle
+function JvmClass.resolve_method(self: t.JvmClass, name: string, descriptor: string): t.Method
     local jvm = self.jvm
-    local interned_method = jvm:_get_interned_method(self, name, descriptor)
-    if interned_method then
-        return interned_method
-    end
 
     if self.interface then
         return jvm:throw_exception("java/lang/IncompatibleClassChangeError", `{self.fqcn} is an interface`)
@@ -232,7 +224,7 @@ function JvmClass.resolve_method(self: t.JvmClass, name: string, descriptor: str
     for _, method in self._methods do
         if method.name == name and method.descriptor == descriptor then
             -- CHECK ACCESS
-            return jvm:_create_interned_method(self, method)
+            return method
         end
     end
 
@@ -241,13 +233,13 @@ function JvmClass.resolve_method(self: t.JvmClass, name: string, descriptor: str
         for _, method in current._methods do
             if method.name == name and method.descriptor == descriptor then
                 -- CHECK ACCESS
-                return self.jvm:_create_interned_method(current, method)
+                return method
             end
         end
         current = current.super
     end
 
-    local function deep_search_interface_method(class_or_interface: t.JvmClass): (t.JvmClass?, t.MethodInfo?)
+    local function deep_search_interface_method(class_or_interface: t.JvmClass): (t.JvmClass?, t.Method?)
         for _, interface in class_or_interface.interfaces do
             for _, method in interface._methods do
                 if method.name == name and method.descriptor == descriptor then
@@ -265,27 +257,27 @@ function JvmClass.resolve_method(self: t.JvmClass, name: string, descriptor: str
     local found_class, found_method = deep_search_interface_method(self)
     if found_class and found_method then
         -- CHECK ACCESS HERE
-        return jvm:_create_interned_method(found_class, found_method)
+        return found_method
     end
 
     return jvm:throw_exception("java/lang/NoSuchMethodError", `{self.fqcn} has no method {name}{descriptor}`)
 end
 
-function JvmClass.invoke_static(self: t.JvmClass, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
+function JvmClass.invoke_static(self: t.JvmClass, method: t.Method, ...: t.JvmValue): t.JvmValue
     self:_ensure_initialised()
     local args: t.Arguments = table.pack(...)
     local dispatched_method = execution.dispatch(self.jvm, method, "static", self)
     return execution.invoke_sync(self.jvm, dispatched_method, args)
 end
 
-function JvmClass.invoke_static_exclusive(self: t.JvmClass, method: t.MethodHandle, ...: t.JvmValue): t.JvmValue
+function JvmClass.invoke_static_exclusive(self: t.JvmClass, method: t.Method, ...: t.JvmValue): t.JvmValue
     self:_ensure_initialised()
     local args: t.Arguments = table.pack(...)
     local dispatched_method = execution.dispatch(self.jvm, method, "static", self)
     return execution.invoke_sync(self.jvm, dispatched_method, args, true)
 end
 
-function JvmClass.get_method(self: t.JvmClass, name: string, descriptor: string): t.MethodInfo?
+function JvmClass.get_method(self: t.JvmClass, name: string, descriptor: string): t.Method?
     for _, method in self._methods do
         if method.name == name and method.descriptor == descriptor then
             return method

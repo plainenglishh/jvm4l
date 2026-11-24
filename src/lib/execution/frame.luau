@@ -8,37 +8,36 @@ local frame = {}
 function frame.push_on(
     jvm: t.Jvm,
     thread: t.Thread,
-    method: t.MethodHandle,
+    method: t.Method,
     invocation: t.Invocation?,
     args: t.Arguments,
     return_to: number?
 )
     local frame: t.StackFrame
-    local method_info = method.info
     local class = method.class
 
-    if not typechecker.check_method_args(jvm, args, class, method_info) then
+    if not typechecker.check_method_args(jvm, args, class, method) then
         jvm:throw_exception("java/lang/IncompatibleClassChangeError", "typechecking failed")
     end
 
-    if method_info.code.kind == "java" then
+    if method.code.kind == "java" then
         ir.transpile(jvm, method)
     end
 
-    if method_info.code.kind == "ir" then
+    if method.code.kind == "ir" then
         local registers: { any } = table.create(255)
 
         local current_arg = 1
         local current_local = 1
 
-        if not method_info.static then
+        if not method.static then
             local this = args[current_arg]
             registers[current_local] = this
             current_arg += 1
             current_local += 1
         end
 
-        for i, arg in method_info.type:get().arguments do
+        for i, arg in method.type:get().arguments do
             local val = args[current_arg]
             registers[current_local] = val
 
@@ -50,32 +49,25 @@ function frame.push_on(
             kind = "java",
             method = method,
             constants = class._constant_pool or error("class has no constant pool"),
-            code = method_info.code,
+            code = method.code,
             registers = registers,
             return_to = return_to,
             start_pc = 0,
             pc = 0,
             invocation = invocation,
         }
-    elseif method_info.code.kind == "luau" then
+    elseif method.code.kind == "luau" then
         frame = {
             kind = "luau",
             method = method,
-            code = method_info.code,
+            code = method.code,
             args = args,
             ctx = {},
             invocation = invocation,
         }
     end
 
-    dbg.trace(
-        jvm,
-        "pushed frame #%i (%s.%s) on thread #%i",
-        #thread.stack + 1,
-        class.fqcn,
-        method_info.signature,
-        thread.id
-    )
+    dbg.trace(jvm, "pushed frame #%i (%s.%s) on thread #%i", #thread.stack + 1, class.fqcn, method.signature, thread.id)
 
     table.insert(thread.stack, frame :: t.StackFrame)
 end
@@ -105,7 +97,7 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
     local frame = stack[#stack]
     local parent_frame = stack[#stack - 1]
     local class = frame.method.class
-    local method_info = frame.method.info
+    local method_info = frame.method
 
     local return_type = method_info.type:get().returns
     local return_ok = typechecker.check_return_type(value, return_type)
