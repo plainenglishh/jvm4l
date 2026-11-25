@@ -13,8 +13,21 @@ function dbg.dump_stack(jvm: t.Jvm)
         for frame_no, frame in thread.stack do
             has_frames = true
             print(`    frame {frame_no}:`)
-            print(`      native: {frame.code.kind == "luau"}`)
+            print(`      method: {frame.method.debug_name}`)
+            print(`      kind: {frame.code.kind}`)
             print(`      invocation: {frame.invocation ~= nil}`)
+            print(`      return to: {frame.return_to}`)
+
+            if frame.code.kind == "java" then
+                print(`      pc: {frame.pc}`)
+                local register_count = frame.code.total_registers
+                local registers = frame.registers
+
+                print(`      registers:`)
+                for i = 1, register_count do
+                    print(`        R{i} = {registers[i]}`)
+                end
+            end
         end
 
         if not has_frames then
@@ -114,6 +127,11 @@ function dbg.luau_scoped_traceback(start_level: number, target_depth: number): s
     end
 
     return table.concat(out, "\n")
+end
+
+function dbg.fs_safe_debug_name(path: string): string
+    local path = path:gsub("/", "."):gsub(":", "_"):gsub("[<>]", "_")
+    return path
 end
 
 return dbg

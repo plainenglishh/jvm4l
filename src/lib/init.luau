@@ -100,7 +100,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
     local message_ref = Throwable:resolve_field("message", "Ljava/lang/String;")
     local message = exception:get_field(message_ref) :: t.JvmObjectRef
     local message_str = ""
-    if not message.null then
+    if message and not message.null then
         message_str = `: {message:inner_string()}`
     end
 
@@ -133,7 +133,7 @@ function jvm4l.display_exception(exception: t.JvmObject): string
                 where = "Unknown Source"
             end
 
-            table.insert(builder, 1, `    at {frame.method.debug_name}({where})`)
+            table.insert(builder, 1, `    at {frame.method.class.fqcn}.{frame.method.name}({where})`)
         end
 
         stack_trace = "\n" .. table.concat(builder, "\n")

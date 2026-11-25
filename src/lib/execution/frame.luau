@@ -12,6 +12,14 @@ function frame.push_on(
     args: t.Arguments,
     return_to: number?
 )
+    dbg.trace(
+        jvm,
+        "pushed %s frame #%i (%s) on thread #%i",
+        if method.native then "native" else "java",
+        #thread.stack + 1,
+        method.debug_name,
+        thread.id
+    )
     local frame: t.StackFrame
     local class = method.class
 
@@ -20,12 +28,11 @@ function frame.push_on(
     end
 
     local code = method.code:get()
-
     if code.kind == "java" then
-        local registers: { any } = table.create(255)
+        local registers: { any } = table.create(code.total_registers)
 
         local current_arg = 1
-        local current_local = 1
+        local current_local = code.local_register_start
 
         if not method.static then
             local this = args[current_arg]
@@ -61,10 +68,9 @@ function frame.push_on(
             args = args,
             ctx = {},
             invocation = invocation,
+            return_to = return_to,
         }
     end
-
-    dbg.trace(jvm, "pushed frame #%i (%s) on thread #%i", #thread.stack + 1, method.debug_name, thread.id)
 
     table.insert(thread.stack, frame :: t.StackFrame)
 end
@@ -112,8 +118,8 @@ function frame.return_from_current_frame(jvm: t.Jvm, thread: t.Thread, count: nu
 
     stack[#stack] = nil
 
-    if parent_frame and parent_frame.code.kind == "java" and count == 1 then
-        assert(frame.return_to, "expected return_to for host invoke")
+    if frame.return_to and count == 1 then
+        assert(parent_frame and parent_frame.code.kind == "java", "expected parent_frame to be java")
         parent_frame.registers[frame.return_to] = value
     end
 

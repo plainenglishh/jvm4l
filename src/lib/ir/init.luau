@@ -2,7 +2,7 @@ local transpiler = require("@self/transpiler")
 local t = require("./t")
 local ir = {}
 
-function ir.transpile(jvm: t.Jvm, java: t.JavaMethodInfo): t.MethodCodeJava
+function ir.transpile(jvm: t.Jvm, java: t.ProtoMethod): t.MethodCodeJava
     return transpiler.transpile(jvm, java)
 end
 

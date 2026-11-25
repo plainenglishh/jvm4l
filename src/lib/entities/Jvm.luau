@@ -222,6 +222,7 @@ function Jvm.throw_exception(
     cause: t.JvmObject?,
     skip_stack_capture: boolean?
 ): never
+    dbg.trace(self, "!!! internal exception %*: %*\n%s", name, message, debug.traceback("", 2))
     local e = self:create_exception(name, message, cause, skip_stack_capture)
     error(e, 0) -- Caught by the outer host if async, or the exec engine if inside bytecode
 end

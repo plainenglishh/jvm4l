@@ -1,3 +1,4 @@
+local dbg = require("./dbg")
 local t = require("./t")
 
 local native_methods: { [string]: { [string]: t.NativeMethodStep } } = {}
@@ -5,6 +6,16 @@ local native_methods: { [string]: { [string]: t.NativeMethodStep } } = {}
 native_methods["java/lang/Object"] = {
     ["hashCode:()I"] = function(_jvm: t.Jvm, ctx: t.NativeContext, this: t.JvmObject): (t.StepExitReason, t.JvmValue)
         return "return", this.hash_code
+    end,
+
+    ["getClass:()Ljava/lang/Class;"] = function(_, ctx: t.NativeContext, this: t.JvmObject)
+        return "return", this.class._mirror
+    end,
+}
+
+native_methods["java/lang/Class"] = {
+    ["getName:()Ljava/lang/String;"] = function(jvm: t.Jvm, ctx: t.NativeContext, this: t.JvmObject)
+        return "return", jvm:create_string(this:inner_class().fqcn)
     end,
 }
 
@@ -71,12 +82,14 @@ native_methods["java/lang/Throwable"] = {
         local stack_depth = #magic.stack
         for i = 1, stack_depth - 1 do
             local frame = magic.stack[i]
+            if frame.method.class:inherits_from(Throwable) then
+                continue
+            end
 
             local elem = StackTraceElement:_new_uninitialised()
             elem:set_field(declaring_class_ref, jvm:create_string(frame.method.class.name))
             elem:set_field(method_name_ref, jvm:create_string(frame.method.name))
-
-            trace[#trace + 1] = elem
+            table.insert(trace, elem)
         end
 
         this:set_field(stacktrace_ref, jvm:create_array(StackTraceElement, trace))
@@ -102,6 +115,13 @@ native_methods["jvm4l/luau/Globals"] = {
         level: t.JvmInt
     ): (t.StepExitReason, t.JvmValue)
         return "return", error(o, level)
+    end,
+}
+
+native_methods["jvm4l/Debug"] = {
+    ["dumpStack:()V"] = function(jvm)
+        dbg.dump_stack(jvm)
+        return "return", nil
     end,
 }
 

@@ -15,15 +15,18 @@ function BufferWriter.new(initial: number?): BufferWriter
 end
 
 function BufferWriter._check_size(self: BufferWriter, needed: number)
-    local target_size = self._capacity + needed
-    local new_size = self._capacity
+    local target_size = self._cursor + needed
+    if target_size <= self._capacity then
+        return
+    end
 
+    local new_size = math.max(self._capacity, 64)
     while target_size > new_size do
-        new_size *= 1.25
+        new_size *= 2
     end
 
     local new_b = buffer.create(new_size)
-    buffer.copy(new_b, 0, self._b, 0, self._capacity)
+    buffer.copy(new_b, 0, self._b, 0, self._cursor)
     self._capacity = new_size
     self._b = new_b
 end

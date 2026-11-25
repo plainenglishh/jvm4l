@@ -14,6 +14,7 @@
 
 ## Short Term Goals
 
+- [ ] optimise `byte[]` arrays to use buffers
 - [ ] internal fatal errors that halt the VM entirely, and shut it down w/o any unwinding (call it panic maybe?). permit no operations after this
     - [ ] jvm wide 'state' = "alive" | "dead" | "panicked", with preserved reason, and a jvm:assert_alive method that throws and reports reason
 - [ ] move some work (e.g. resolution) out of `Jvm`. it shouldnt be a god class!

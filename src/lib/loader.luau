@@ -43,7 +43,6 @@ local function add_members_from_classfile(
                             "java/lang/UnsatisfiedLinkError",
                             `unable to link native method {class_name}.{signature}`
                         )
-
                     tracer("linked native method `%s` in %t", debug_name)
                     return table.freeze({
                         kind = "luau" :: "luau",
@@ -75,6 +74,7 @@ local function add_members_from_classfile(
 
                     local line_numbers = class_parser.line_numbers(classfile, code_attribute)
                     local code = ir.transpile(jvm, {
+                        debug_name = debug_name,
                         bc = code_attribute.code,
                         max_stack = code_attribute.max_stack,
                         max_locals = code_attribute.max_locals,

@@ -3,6 +3,8 @@ package jvm4l.test;
 import static jvm4l.luau.Globals.error;
 import static jvm4l.luau.Globals.print;
 
+import jvm4l.Debug;
+
 /**
  * Used for testing execution before application class loader is in a usable 
  * state.
@@ -24,6 +26,9 @@ public class Test {
     }
 
     public static void main() throws Exception {
+        Object o = new Object();
+        print_string(o.getClass().getName());
+
         try {
             int value = loop();
             print_int(value);

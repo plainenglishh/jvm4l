@@ -121,9 +121,14 @@ local function generate(method: t.Method): (boolean, string)
 
     local writer = StringBuilder.new()
 
-    writer:writeln([[
+    writer:writeln(
+        [=[
 --!nolint UnreachableCode
 --!nolint LocalUnused
+
+--[[
+%s
+]]
 
 @native
 local function step(jvm: any, f: any): ...any
@@ -131,7 +136,9 @@ local pc: number = f.pc
 local k: any = f.constants
 local registers = f.registers
 while true do
-]])
+]=],
+        ir.dissasembler.disassemble(code)
+    )
 
     for _, block in blocks do
         if block.start_pc ~= 0 then

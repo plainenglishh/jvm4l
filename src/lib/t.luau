@@ -587,7 +587,7 @@ export type MethodCode = MethodCodeJava | MethodCodeLuau | MethodCodeAbstract
 
 export type JitState =
     {
-        read kind: "candidate",
+        read kind: "candidate" | "disabled",
     }
     | {
         read kind: "compiled",
@@ -595,6 +595,7 @@ export type JitState =
     }
     | {
         read kind: "failed",
+        read reason: string,
     }
 
 --[=[
@@ -614,7 +615,7 @@ export type MethodCodeJava = {
     read code: buffer,
     read exceptions: ExceptionTable,
     read line_numbers: LineNumberTable?,
-    read from_java: JavaMethodInfo,
+    read proto: ProtoMethod,
     read jit: JitState,
 }
 
@@ -640,7 +641,8 @@ export type MethodCodeAbstract = {
     read kind: "abstract",
 }
 
-export type JavaMethodInfo = {
+export type ProtoMethod = {
+    debug_name: string,
     bc: buffer,
     exceptions: ExceptionTable,
     line_numbers: LineNumberTable?,

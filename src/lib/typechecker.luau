@@ -80,31 +80,26 @@ end
 function typechecker.check_method_args(jvm: t.Jvm, values: t.Arguments, class: t.JvmClass, target: t.Method): boolean
     local method_type = target.type:get()
     local static = target.static
-    local expected_args = #method_type.arguments + if static then 0 else 1
+    local arg_offset = if static then 0 else 1
+    local expected_args = #method_type.arguments + arg_offset
 
     if values.n ~= expected_args then
         return false
     end
 
-    local arg_start = 1
     if not static then
-        arg_start = 2
-
-        if values[1] == nil then
+        local this = values[1] :: t.JvmObject
+        if not this or this.null then
             return false
         end
 
-        if not typechecker.check_field_type(values[1], class) then
-            print("wrong this")
-
+        if not typechecker.check_field_type(this, class) then
             return false
         end
     end
 
-    for i = arg_start, #method_type.arguments do
-        if not typechecker.check_field_type(values[i], method_type.arguments[i]) then
-            print("wrong arg", 1, values[i], method_type.arguments[i])
-
+    for i = 1, #method_type.arguments do
+        if not typechecker.check_field_type(values[i + arg_offset], method_type.arguments[i]) then
             return false
         end
     end

@@ -49,15 +49,15 @@ type JumpTarget = {
 
 type SlotSize = "1" | "2"
 
-function transpiler.transpile(jvm: t.Jvm, method: t.JavaMethodInfo): t.MethodCodeJava
-    local bc = method.bc
+function transpiler.transpile(jvm: t.Jvm, proto: t.ProtoMethod): t.MethodCodeJava
+    local bc = proto.bc
     local bc_len = buffer.len(bc)
     local ir = BufferWriter.new(bc_len * 2)
 
     local jump_targets: { JumpTarget } = {}
     local stack: { SlotSize } = {}
     local stack_depth = 0
-    local k = method.constant_pool
+    local k = proto.constant_pool
 
     --local locals = condense_locals(code)
 
@@ -98,7 +98,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.JavaMethodInfo): t.MethodCod
     end
 
     local temp_start = 1
-    local locals_start = temp_start + method.max_stack
+    local locals_start = temp_start + proto.max_stack
 
     local function get_local_register(index: number): number
         return locals_start + index
@@ -120,7 +120,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.JavaMethodInfo): t.MethodCod
         local start_ir_pc = ir:cursor()
         record_pc(start_pc, start_ir_pc)
 
-        for _, exception in method.exceptions do
+        for _, exception in proto.exceptions do
             if exception.handler_pc == start_pc then
                 table.clear(stack)
                 push_stack_register("1")
@@ -276,7 +276,9 @@ function transpiler.transpile(jvm: t.Jvm, method: t.JavaMethodInfo): t.MethodCod
             local dispatch_type = op - 0xB6
 
             local kmethod = fetch_u16()
+
             local method = k:get(kmethod, "method")
+
             local arg_words = descriptors.argument_words(method.descriptor)
             local arg_count = #arg_words
             if op ~= 0xB8 then
@@ -343,7 +345,7 @@ function transpiler.transpile(jvm: t.Jvm, method: t.JavaMethodInfo): t.MethodCod
     end
 
     local handlers: { t.ExceptionHandler } = {}
-    for i, exception in method.exceptions do
+    for i, exception in proto.exceptions do
         handlers[i] = {
             start_pc = get_pc(exception.start_pc),
             end_pc = get_pc(exception.end_pc),
@@ -353,9 +355,9 @@ function transpiler.transpile(jvm: t.Jvm, method: t.JavaMethodInfo): t.MethodCod
     end
 
     local line_numbers
-    if method.line_numbers then
+    if proto.line_numbers then
         line_numbers = {}
-        for i, entry in method.line_numbers do
+        for i, entry in proto.line_numbers do
             line_numbers[i] = {
                 line = entry.line,
                 start_pc = get_pc(entry.start_pc),
@@ -364,18 +366,22 @@ function transpiler.transpile(jvm: t.Jvm, method: t.JavaMethodInfo): t.MethodCod
         end
     end
 
-    return table.freeze({
+    local method_code = table.freeze({
         kind = "java" :: "java",
-        from_java = method,
-        temp_register_count = method.max_stack,
-        local_register_count = method.max_locals,
+        proto = proto,
+        temp_register_count = proto.max_stack,
+        local_register_count = proto.max_locals,
         local_register_start = locals_start,
-        total_registers = method.max_stack + method.max_locals,
+        total_registers = proto.max_stack + proto.max_locals,
         code = ir,
         exceptions = handlers,
         line_numbers = line_numbers,
         jit = { kind = "candidate " :: "candidate" },
     })
+
+    dbg.dump_artifact(jvm, dbg.fs_safe_debug_name(`{proto.debug_name}.asm`), dissasembler.disassemble(method_code))
+
+    return method_code
 end
 
 return transpiler

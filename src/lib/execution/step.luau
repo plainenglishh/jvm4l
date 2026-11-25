@@ -42,7 +42,7 @@ local function is_throwable(value: unknown): boolean
     end
 
     local value = value :: t.JvmObject
-    return value:instance_of(value.jvm._classes.bootstrap["java/lang/Throwable"])
+    return value:instance_of(value.class.jvm._classes.bootstrap["java/lang/Throwable"])
 end
 
 local function coerce_error(jvm: t.Jvm, e: unknown, invoke_depth: number): t.JvmObject
@@ -256,10 +256,15 @@ local function step_interpreter(jvm: t.Jvm, f: t.StackFrameJava): (t.StepExitRea
             local rargs_count = fetch_u8()
             local args = table.create(rargs_count) :: { t.JvmValue }
             for i = 1, rargs_count do
-                args[1] = r[fetch_u16()]
+                args[i] = r[fetch_u16()]
             end
 
-            local dispatched = dispatcher.dispatch(jvm, method, dispatch_type, f.method.class)
+            local executing_object: t.JvmObject?
+            if dispatch_type ~= "static" then
+                executing_object = args[1] :: t.JvmObject
+            end
+
+            local dispatched = dispatcher.dispatch(jvm, method, dispatch_type, f.method.class, executing_object)
             invoke_inline(jvm, dispatched, t.Arguments.from_array(args, rargs_count), dst)
             break
         elseif op == 0x81 then -- `return`

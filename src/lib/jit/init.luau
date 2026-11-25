@@ -7,8 +7,9 @@ local function set_jit_state_compiled(state: t.JitState, closure: t.MethodStepJa
     (state :: any).closure = closure
 end
 
-local function set_jit_state_failed(state: t.JitState)
+local function set_jit_state_failed(state: t.JitState, reason: string)
     (state :: any).kind = "failed"
+    (state :: any).reason = reason
 end
 
 local function compiled(jvm: t.Jvm, method: t.Method): t.MethodStepJava?
@@ -20,48 +21,50 @@ local function compiled(jvm: t.Jvm, method: t.Method): t.MethodStepJava?
     local jit_state = code.jit
     if jit_state.kind == "compiled" then
         return jit_state.closure
-    elseif jit_state.kind == "failed" then
-        return nil
     end
 
     return nil
 end
 
-local function compile(jvm: t.Jvm, method: t.Method)
+local jit = {}
+
+function jit.compile(jvm: t.Jvm, method: t.Method)
     local code = method.code:get()
     assert(code.kind == "java", "attempt to jit compile non-java method")
 
     local jit_state = code.jit
 
-    local start_t = os.clock()
+    local tracer = dbg.timed_trace(jvm)
+    local jit_load = jvm._settings.jit_load
+
+    if not jit_load then
+        tracer("unable to jit compile: no jit_load", method.debug_name)
+        set_jit_state_failed(jit_state, "no jit load")
+        return
+    end
 
     local ok, src_or_reason = generate(method)
     if not ok then
-        dbg.trace(jvm, "unable to jit compile `%s`: %s", method.debug_name, src_or_reason)
-        set_jit_state_failed(jit_state)
+        tracer("unable to jit compile `%s`: %s", method.debug_name, src_or_reason)
+        set_jit_state_failed(jit_state, src_or_reason)
         return
     end
 
-    dbg.dump_artifact(jvm, `jit/{method.class.name}_{method.name:gsub("[<>]", "__")}.luau`, src_or_reason)
+    dbg.dump_artifact(jvm, dbg.fs_safe_debug_name(method.debug_name) .. ".luau", src_or_reason)
 
-    local jit_load = assert(jvm._settings.jit_load)
     local load_ok, loaded = pcall(jit_load, src_or_reason, "=jvm4l_jit")
     if not load_ok then
-        dbg.trace(jvm, "unable to jit compile `%s`: error in loading: %s", method.debug_name, loaded)
-        set_jit_state_failed(jit_state)
+        tracer("unable to jit compile `%s`: error in loading: %s", method.debug_name, loaded)
+        set_jit_state_failed(jit_state, loaded :: any)
         return
     end
 
-    --code.jit = loaded() :: t.MethodStepJava
-    local time_ms = (os.clock() - start_t) * 1000
-    dbg.trace(jvm, "jit compiled `%s` in %.3fms", method.debug_name, time_ms)
+    tracer("jit compiled `%s` in %t", method.debug_name)
     set_jit_state_compiled(jit_state, loaded())
 end
 
-local jit = {}
-
-function jit.compile(jvm: t.Jvm, method: t.Method)
-    compile(jvm, method)
+function jit.compiled(jvm: t.Jvm)
+    return compiled
 end
 
 function jit.query(jvm: t.Jvm, method: t.Method): t.MethodStepJava?

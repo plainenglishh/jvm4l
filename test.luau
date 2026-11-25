@@ -79,11 +79,11 @@ local ok, err = pcall(function(...)
     jit.compile(vm, loop_ref)
 
     local start = os.clock()
-    for i = 1, 5 do
+    for i = 1, 1 do
         Test:invoke_static(test_ref)
     end
     local finish = os.clock()
-    local time_taken = ((finish - start) / 5) * 1000
+    local time_taken = ((finish - start) / 1) * 1000
     print(string.format("took %.3fms", time_taken))
 end)
 
