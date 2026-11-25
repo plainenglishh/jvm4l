@@ -26,6 +26,7 @@
 - [x] type/access check on frame push
 - [ ] reflection methods on JvmClass.
 - [ ] TESTING!!
+- [ ] assert all the constraints defined in JVMS 4.9
 - [X] important!: clarify class lifecycle. when classes are loaded, initialised, etc, and when to resolve symbolic references (jvmtype is currently a live reference, should it be symbolic?)
 - [X] lazily loaded constant pool (backed by the classfile)
 - [X] consider 'unflattening' method/field tables

@@ -88,7 +88,7 @@ export type Instruction = {
     read name: string,
     read size: Size,
     read operands: Operands,
-    --- Whether this instruction requires a step burst to break (e.g. on method invocation, scheduler boundary, method return, etc)
+    --- Whether this instruction requires a step burst to break.
     read breaks: boolean,
     --- Whether this instruction can jump.
     read can_jump: boolean,
@@ -387,7 +387,6 @@ DEFINE_OP(0x81, "return", {
     operands = {
         { name = "src", type = "register" :: "register", direction = "src" },
     },
-    breaks = true,
 })
 
 --------------------------------------------------------------------------------
